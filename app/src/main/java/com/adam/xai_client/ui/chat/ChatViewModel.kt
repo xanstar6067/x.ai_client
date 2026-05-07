@@ -182,6 +182,18 @@ class ChatViewModel(
         }
     }
 
+    fun deleteMessage(messageId: Long) {
+        viewModelScope.launch {
+            if (_uiState.value.isSending) return@launch
+            runCatching {
+                chatRepository.deleteMessage(messageId)
+                _uiState.value.chatId?.let { chatRepository.touchChat(it) }
+            }.onFailure { throwable ->
+                _uiState.update { it.copy(error = throwable.toUserMessage()) }
+            }
+        }
+    }
+
     fun onModelSelected(modelId: String) {
         _uiState.update {
             it.copy(

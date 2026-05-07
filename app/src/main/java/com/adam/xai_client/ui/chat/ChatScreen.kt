@@ -71,6 +71,7 @@ fun ChatScreen(
     onRegenerate: () -> Unit,
     onResendMessage: (Long) -> Unit,
     onUpdateMessage: (Long, String) -> Unit,
+    onDeleteMessage: (Long) -> Unit,
     onModelInfoOpenChange: (Boolean) -> Unit,
     onModelSettingsOpenChange: (Boolean) -> Unit,
     onMaxTokensChange: (Int?) -> Unit,
@@ -198,7 +199,8 @@ fun ChatScreen(
                             },
                             onRegenerate = onRegenerate,
                             onResend = { onResendMessage(message.id) },
-                            onEdit = { text -> onUpdateMessage(message.id, text) }
+                            onEdit = { text -> onUpdateMessage(message.id, text) },
+                            onDelete = { onDeleteMessage(message.id) }
                         )
                     }
                 }

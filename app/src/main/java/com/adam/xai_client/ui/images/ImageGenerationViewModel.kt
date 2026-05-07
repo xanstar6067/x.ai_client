@@ -188,6 +188,20 @@ class ImageGenerationViewModel(
         }
     }
 
+    fun deleteMessage(messageId: Long) {
+        viewModelScope.launch {
+            if (_uiState.value.isGenerating) return@launch
+            runCatching {
+                imageRepository.deleteMessage(messageId)
+                if (_uiState.value.editingMessageId == messageId) {
+                    _uiState.update { it.copy(editingMessageId = null, sourceImageUrl = "") }
+                }
+            }.onFailure { throwable ->
+                _uiState.update { it.copy(error = throwable.toUserMessage()) }
+            }
+        }
+    }
+
     fun editFromMessage(messageId: Long) {
         _uiState.update {
             it.copy(

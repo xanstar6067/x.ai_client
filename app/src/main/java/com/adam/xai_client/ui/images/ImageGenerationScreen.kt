@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Save
@@ -59,7 +60,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -87,6 +90,7 @@ fun ImageGenerationScreen(
     onImageSettingsOpenChange: (Boolean) -> Unit,
     onShowChatList: () -> Unit,
     onEditFromMessage: (Long) -> Unit,
+    onDeleteMessage: (Long) -> Unit,
     onClearEditSource: () -> Unit,
     onGenerate: () -> Unit,
     onSave: (Long) -> Unit,
@@ -96,6 +100,7 @@ fun ImageGenerationScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     var pendingSaveMessageId by remember { mutableLongStateOf(0L) }
     var chatPendingDeletion by remember { mutableStateOf<ImageChat?>(null) }
     val isChatOpen = state.selectedChatId != null || state.isNewChatMode
@@ -167,6 +172,8 @@ fun ImageGenerationScreen(
                 onModelSelected = onModelSelected,
                 onImageSettingsOpenChange = onImageSettingsOpenChange,
                 onEditFromMessage = onEditFromMessage,
+                onDeleteMessage = onDeleteMessage,
+                onCopyMessage = { text -> clipboardManager.setText(AnnotatedString(text)) },
                 onClearEditSource = onClearEditSource,
                 onGenerate = onGenerate,
                 onSaveRequested = { messageId ->
@@ -315,6 +322,8 @@ private fun ImageChatContent(
     onModelSelected: (String) -> Unit,
     onImageSettingsOpenChange: (Boolean) -> Unit,
     onEditFromMessage: (Long) -> Unit,
+    onDeleteMessage: (Long) -> Unit,
+    onCopyMessage: (String) -> Unit,
     onClearEditSource: () -> Unit,
     onGenerate: () -> Unit,
     onSaveRequested: (Long) -> Unit
@@ -362,7 +371,10 @@ private fun ImageChatContent(
                     ImageMessageCard(
                         message = message,
                         isSaving = state.isSavingMessageId == message.id,
+                        isGenerating = state.isGenerating,
+                        onCopy = { onCopyMessage(message.content) },
                         onEdit = { onEditFromMessage(message.id) },
+                        onDelete = { onDeleteMessage(message.id) },
                         onSave = { onSaveRequested(message.id) }
                     )
                 }
@@ -501,7 +513,10 @@ private fun ImagePromptBar(
 private fun ImageMessageCard(
     message: ImageChatMessage,
     isSaving: Boolean,
+    isGenerating: Boolean,
+    onCopy: () -> Unit,
     onEdit: () -> Unit,
+    onDelete: () -> Unit,
     onSave: () -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -545,6 +560,23 @@ private fun ImageMessageCard(
                         Spacer(Modifier.padding(3.dp))
                         Text("Сохранить")
                     }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (message.content.isNotBlank()) {
+                    IconButton(onClick = onCopy) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Копировать")
+                    }
+                }
+                IconButton(
+                    onClick = onDelete,
+                    enabled = !isGenerating
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = "Удалить")
                 }
             }
         }

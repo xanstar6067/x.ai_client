@@ -19,4 +19,7 @@ interface ImageMessageDao {
 
     @Insert
     suspend fun insertMessage(message: ImageMessageEntity): Long
+
+    @Query("DELETE FROM image_messages WHERE id = :messageId")
+    suspend fun deleteMessageById(messageId: Long)
 }

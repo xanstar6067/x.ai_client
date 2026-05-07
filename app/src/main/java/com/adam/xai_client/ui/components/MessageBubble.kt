@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -48,6 +49,7 @@ fun MessageBubble(
     onRegenerate: () -> Unit,
     onResend: () -> Unit,
     onEdit: (String) -> Unit,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isUser = message.role == MessageRole.USER
@@ -140,6 +142,12 @@ fun MessageBubble(
                                         contentDescription = "Редактировать"
                                     )
                                 }
+                            }
+                            IconButton(onClick = onDelete) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = "Удалить"
+                                )
                             }
                             if (copyText.isNotBlank()) {
                                 IconButton(onClick = { onCopy(copyText) }) {

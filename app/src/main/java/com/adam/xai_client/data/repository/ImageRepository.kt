@@ -92,6 +92,10 @@ class ImageRepository(
         imageChatDao.deleteChatById(chatId)
     }
 
+    suspend fun deleteMessage(messageId: Long) {
+        imageMessageDao.deleteMessageById(messageId)
+    }
+
     suspend fun updateChatSelection(
         chatId: Long,
         selectedModelId: String?,
