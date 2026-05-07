@@ -65,7 +65,7 @@ object XaiModelLimits {
     fun forModel(modelId: String?): ModelLimits? {
         val normalized = modelId.orEmpty().lowercase()
         return when {
-            normalized == "grok-4.20-multi-agent" -> grok420MultiAgent
+            normalized.startsWith("grok-4.20-multi-agent") -> grok420MultiAgent
             normalized.startsWith("grok-4.20") -> grok420
             normalized.startsWith("grok-3-mini") -> grok3Mini
             normalized.startsWith("grok-3") -> grok3

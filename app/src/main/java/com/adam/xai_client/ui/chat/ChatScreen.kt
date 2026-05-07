@@ -145,7 +145,7 @@ fun ChatScreen(
                 onModelSelected = onModelSelected,
                 onRoleSelected = onRoleSelected
             )
-            if (state.selectedModelId.orEmpty().lowercase() == "grok-4.20-multi-agent") {
+            if (state.selectedModelId.isGrok420MultiAgent()) {
                 MultiAgentQuickSettings(
                     selectedEffort = state.modelSettings.reasoningEffort,
                     onReasoningEffortChange = onReasoningEffortChange
@@ -249,6 +249,8 @@ private fun MultiAgentQuickSettings(
     selectedEffort: ReasoningEffort?,
     onReasoningEffortChange: (ReasoningEffort?) -> Unit
 ) {
+    val selectedAgentCount = selectedEffort.agentCount()
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -256,7 +258,7 @@ private fun MultiAgentQuickSettings(
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
-            text = "Multi-agent: ${selectedEffort.agentCountLabel()}",
+            text = "Multi-agent agents: $selectedAgentCount",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -276,6 +278,17 @@ private fun ReasoningEffort?.agentCountLabel(): String {
         ReasoningEffort.HIGH, ReasoningEffort.XHIGH -> "16 агентов"
         else -> "4 агента"
     }
+}
+
+private fun ReasoningEffort?.agentCount(): Int {
+    return when (this) {
+        ReasoningEffort.HIGH, ReasoningEffort.XHIGH -> 16
+        else -> 4
+    }
+}
+
+private fun String?.isGrok420MultiAgent(): Boolean {
+    return orEmpty().lowercase().startsWith("grok-4.20-multi-agent")
 }
 
 @Composable
@@ -441,13 +454,9 @@ private fun ModelSettingsDialog(
 ) {
     val maxContext = limits?.contextWindowTokens ?: 131_072
     val normalizedModelId = modelId.orEmpty().lowercase()
-    val isGrok420MultiAgent = normalizedModelId == "grok-4.20-multi-agent"
+    val isGrok420MultiAgent = normalizedModelId.startsWith("grok-4.20-multi-agent")
     val supportsReasoningEffort = normalizedModelId.startsWith("grok-3-mini") || isGrok420MultiAgent
-    val reasoningEffortOptions = if (isGrok420MultiAgent) {
-        ReasoningEffort.entries
-    } else {
-        listOf(ReasoningEffort.LOW, ReasoningEffort.HIGH)
-    }
+    val reasoningEffortOptions = listOf(ReasoningEffort.LOW, ReasoningEffort.HIGH)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -465,16 +474,16 @@ private fun ModelSettingsDialog(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (supportsReasoningEffort) {
+                if (isGrok420MultiAgent) {
                     DropdownSelector(
-                        label = if (isGrok420MultiAgent) "Agent setup" else "Reasoning effort",
+                        label = "Agent count",
                         options = reasoningEffortOptions,
                         selectedOption = settings.reasoningEffort,
                         optionLabel = { effort ->
                             when {
                                 !isGrok420MultiAgent -> effort.label
-                                effort == ReasoningEffort.LOW || effort == ReasoningEffort.MEDIUM -> "${effort.label} - 4 agents"
-                                else -> "${effort.label} - 16 agents"
+                                effort == ReasoningEffort.LOW || effort == ReasoningEffort.MEDIUM -> "4 agents"
+                                else -> "16 agents"
                             }
                         },
                         onOptionSelected = onReasoningEffortChange,
@@ -491,6 +500,11 @@ private fun ModelSettingsDialog(
                     }
                 }
                 if (isGrok420MultiAgent) {
+                    Text(
+                        text = "xAI maps 4 agents to reasoning.effort=low/medium and 16 agents to high/xhigh.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Text(
                         text = "Max output tokens не поддерживается для multi-agent.",
                         style = MaterialTheme.typography.bodySmall,
@@ -539,7 +553,7 @@ private fun ModelSettingsDialog(
                         onValueChange = onPresencePenaltyChange
                     )
                 }
-                if (supportsReasoningEffort) {
+                if (supportsReasoningEffort && !isGrok420MultiAgent) {
                     DropdownSelector(
                         label = if (isGrok420MultiAgent) "Agent setup" else "Reasoning effort",
                         options = reasoningEffortOptions,

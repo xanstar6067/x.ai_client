@@ -474,11 +474,11 @@ class ChatViewModel(
 
     private fun String?.supportsReasoningEffort(): Boolean {
         val normalized = orEmpty().lowercase()
-        return normalized.startsWith("grok-3-mini") || normalized == "grok-4.20-multi-agent"
+        return normalized.startsWith("grok-3-mini") || normalized.startsWith("grok-4.20-multi-agent")
     }
 
     private fun String?.isGrok420MultiAgent(): Boolean {
-        return orEmpty().lowercase() == "grok-4.20-multi-agent"
+        return orEmpty().lowercase().startsWith("grok-4.20-multi-agent")
     }
 
     companion object {

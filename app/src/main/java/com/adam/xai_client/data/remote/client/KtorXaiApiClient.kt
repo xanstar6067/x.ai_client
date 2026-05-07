@@ -367,7 +367,7 @@ class KtorXaiApiClient(
     }
 
     private fun String.usesResponsesApi(): Boolean {
-        return lowercase() == "grok-4.20-multi-agent"
+        return lowercase().startsWith("grok-4.20-multi-agent")
     }
 
     private fun ChatModelSettings.forResponsesApi(modelId: String): ChatModelSettings {
