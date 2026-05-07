@@ -1,10 +1,12 @@
 package com.adam.xai_client.data.repository
 
 import com.adam.xai_client.data.local.entity.AiModelEntity
+import com.adam.xai_client.data.local.entity.ChatModelSettingsEntity
 import com.adam.xai_client.data.local.entity.ChatEntity
 import com.adam.xai_client.data.local.entity.MessageEntity
 import com.adam.xai_client.data.local.entity.ModelRoleEntity
 import com.adam.xai_client.domain.model.AiModel
+import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.Chat
 import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.ModelRole
@@ -46,4 +48,28 @@ internal fun ModelRoleEntity.asDomain(): ModelRole = ModelRole(
     prompt = prompt,
     isDefault = isDefault,
     isBuiltIn = isBuiltIn
+)
+
+internal fun ChatModelSettingsEntity.asDomain(): ChatModelSettings = ChatModelSettings(
+    chatId = chatId,
+    maxTokens = maxTokens,
+    temperature = temperature,
+    topP = topP,
+    frequencyPenalty = frequencyPenalty,
+    presencePenalty = presencePenalty,
+    reasoningEffort = reasoningEffort
+)
+
+internal fun ChatModelSettings.asEntity(
+    chatId: Long,
+    updatedAt: Long
+): ChatModelSettingsEntity = ChatModelSettingsEntity(
+    chatId = chatId,
+    maxTokens = maxTokens,
+    temperature = temperature,
+    topP = topP,
+    frequencyPenalty = frequencyPenalty,
+    presencePenalty = presencePenalty,
+    reasoningEffort = reasoningEffort,
+    updatedAt = updatedAt
 )

@@ -5,6 +5,7 @@ import com.adam.xai_client.data.remote.dto.ApiChatMessage
 import com.adam.xai_client.data.repository.ChatRepository
 import com.adam.xai_client.data.repository.RoleRepository
 import com.adam.xai_client.data.repository.SettingsRepository
+import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.MessageRole
 import kotlinx.coroutines.flow.collect
 
@@ -19,6 +20,7 @@ class SendMessageUseCase(
         input: String,
         selectedModelId: String?,
         selectedRoleId: Long?,
+        modelSettings: ChatModelSettings = ChatModelSettings(),
         onChatReady: suspend (Long) -> Unit = {},
         addUserMessage: Boolean = true
     ): Long {
@@ -43,6 +45,7 @@ class SendMessageUseCase(
             selectedRoleId = effectiveRoleId,
             now = now
         )
+        val effectiveModelSettings = modelSettings.copy(chatId = targetChatId)
 
         if (chatId != null) {
             chatRepository.updateChatSelection(
@@ -51,6 +54,9 @@ class SendMessageUseCase(
                 selectedRoleId = effectiveRoleId,
                 updatedAt = now
             )
+        }
+        if (effectiveModelSettings.hasCustomValues) {
+            chatRepository.updateModelSettings(targetChatId, effectiveModelSettings, now)
         }
 
         if (addUserMessage) {
@@ -97,7 +103,8 @@ class SendMessageUseCase(
                 apiKey = settings.apiKey,
                 baseUrl = settings.baseUrl,
                 modelId = modelId,
-                messages = requestMessages
+                messages = requestMessages,
+                modelSettings = effectiveModelSettings
             ).collect { delta ->
                 if (delta.content.isNotEmpty()) {
                     assistantReply.append(delta.content)

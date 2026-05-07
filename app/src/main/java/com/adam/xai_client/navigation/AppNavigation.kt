@@ -67,6 +67,15 @@ fun XaiChatNavHost(container: AppContainer) {
                 },
                 onRegenerate = viewModel::regenerateLastResponse,
                 onResendMessage = viewModel::resendFromUserMessage,
+                onModelInfoOpenChange = viewModel::setModelInfoOpen,
+                onModelSettingsOpenChange = viewModel::setModelSettingsOpen,
+                onMaxTokensChange = viewModel::updateMaxTokens,
+                onTemperatureChange = viewModel::updateTemperature,
+                onTopPChange = viewModel::updateTopP,
+                onFrequencyPenaltyChange = viewModel::updateFrequencyPenalty,
+                onPresencePenaltyChange = viewModel::updatePresencePenalty,
+                onReasoningEffortChange = viewModel::updateReasoningEffort,
+                onResetModelSettings = viewModel::resetModelSettings,
                 onBack = { navController.popBackStack() },
                 onErrorShown = viewModel::clearError
             )
@@ -90,6 +99,15 @@ fun XaiChatNavHost(container: AppContainer) {
                 onSend = { viewModel.sendMessage {} },
                 onRegenerate = viewModel::regenerateLastResponse,
                 onResendMessage = viewModel::resendFromUserMessage,
+                onModelInfoOpenChange = viewModel::setModelInfoOpen,
+                onModelSettingsOpenChange = viewModel::setModelSettingsOpen,
+                onMaxTokensChange = viewModel::updateMaxTokens,
+                onTemperatureChange = viewModel::updateTemperature,
+                onTopPChange = viewModel::updateTopP,
+                onFrequencyPenaltyChange = viewModel::updateFrequencyPenalty,
+                onPresencePenaltyChange = viewModel::updatePresencePenalty,
+                onReasoningEffortChange = viewModel::updateReasoningEffort,
+                onResetModelSettings = viewModel::resetModelSettings,
                 onBack = { navController.popBackStack() },
                 onErrorShown = viewModel::clearError
             )

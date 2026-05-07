@@ -3,10 +3,11 @@ package com.adam.xai_client.data.remote.client
 import com.adam.xai_client.data.remote.api.XaiApiClient
 import com.adam.xai_client.data.remote.api.ChatStreamDelta
 import com.adam.xai_client.data.remote.dto.ApiChatMessage
-import com.adam.xai_client.data.remote.dto.ChatCompletionRequestDto
 import com.adam.xai_client.data.remote.dto.ChatCompletionResponseDto
 import com.adam.xai_client.data.remote.dto.ModelsResponseDto
+import com.adam.xai_client.data.remote.dto.chatCompletionRequestDto
 import com.adam.xai_client.domain.model.AiModel
+import com.adam.xai_client.domain.model.ChatModelSettings
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -71,7 +72,8 @@ class KtorXaiApiClient(
         apiKey: String,
         baseUrl: String,
         modelId: String,
-        messages: List<ApiChatMessage>
+        messages: List<ApiChatMessage>,
+        modelSettings: ChatModelSettings
     ): String {
         val response = httpClient.post(endpoint(baseUrl, "/chat/completions")) {
             bearerAuth(apiKey)
@@ -81,10 +83,11 @@ class KtorXaiApiClient(
             }
             contentType(ContentType.Application.Json)
             setBody(
-                ChatCompletionRequestDto(
+                chatCompletionRequestDto(
                     model = modelId,
                     messages = messages,
-                    stream = false
+                    stream = false,
+                    settings = modelSettings
                 )
             )
         }
@@ -97,16 +100,18 @@ class KtorXaiApiClient(
         apiKey: String,
         baseUrl: String,
         modelId: String,
-        messages: List<ApiChatMessage>
+        messages: List<ApiChatMessage>,
+        modelSettings: ChatModelSettings
     ): Flow<ChatStreamDelta> = flow {
         val response = httpClient.post(endpoint(baseUrl, "/chat/completions")) {
             bearerAuth(apiKey)
             contentType(ContentType.Application.Json)
             setBody(
-                ChatCompletionRequestDto(
+                chatCompletionRequestDto(
                     model = modelId,
                     messages = messages,
-                    stream = true
+                    stream = true,
+                    settings = modelSettings
                 )
             )
         }

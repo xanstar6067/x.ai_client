@@ -11,9 +11,13 @@ import com.adam.xai_client.data.repository.ModelRepository
 import com.adam.xai_client.data.repository.RoleRepository
 import com.adam.xai_client.data.repository.SettingsRepository
 import com.adam.xai_client.domain.model.AiModel
+import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.MessageRole
+import com.adam.xai_client.domain.model.ModelLimits
 import com.adam.xai_client.domain.model.ModelRole
+import com.adam.xai_client.domain.model.ReasoningEffort
+import com.adam.xai_client.domain.model.XaiModelLimits
 import com.adam.xai_client.domain.usecase.MessageSendFailedException
 import com.adam.xai_client.domain.usecase.SendMessageUseCase
 import com.adam.xai_client.ui.components.toUserMessage
@@ -32,9 +36,13 @@ data class ChatUiState(
     val inputText: String = "",
     val selectedModelId: String? = null,
     val selectedRoleId: Long? = null,
+    val modelSettings: ChatModelSettings = ChatModelSettings(),
+    val selectedModelLimits: ModelLimits? = null,
     val availableModels: List<AiModel> = emptyList(),
     val availableRoles: List<ModelRole> = emptyList(),
     val isSending: Boolean = false,
+    val isModelInfoOpen: Boolean = false,
+    val isModelSettingsOpen: Boolean = false,
     val error: String? = null
 )
 
@@ -94,11 +102,27 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
+            chatIdFlow.flatMapLatest { chatRepository.observeModelSettings(it) }
+                .collect { settings ->
+                    _uiState.update { state ->
+                        val normalized = settings.normalizedForModel(state.selectedModelId)
+                        state.copy(modelSettings = normalized)
+                    }
+                }
+        }
+
+        viewModelScope.launch {
             modelRepository.models.collect { models ->
                 latestModels = models
                 val selectedModelId = _uiState.value.selectedModelId
                     ?: models.firstOrNull { it.isEnabledForChat }?.id
-                _uiState.update { it.copy(selectedModelId = selectedModelId) }
+                _uiState.update {
+                    it.copy(
+                        selectedModelId = selectedModelId,
+                        selectedModelLimits = XaiModelLimits.forModel(selectedModelId),
+                        modelSettings = it.modelSettings.normalizedForModel(selectedModelId)
+                    )
+                }
                 updateAvailableModels(selectedModelId)
             }
         }
@@ -124,7 +148,14 @@ class ChatViewModel(
     }
 
     fun onModelSelected(modelId: String) {
-        _uiState.update { it.copy(selectedModelId = modelId, error = null) }
+        _uiState.update {
+            it.copy(
+                selectedModelId = modelId,
+                selectedModelLimits = XaiModelLimits.forModel(modelId),
+                modelSettings = it.modelSettings.normalizedForModel(modelId),
+                error = null
+            )
+        }
         updateAvailableModels(modelId)
         viewModelScope.launch {
             settingsRepository.setLastSelectedModelId(modelId)
@@ -136,6 +167,7 @@ class ChatViewModel(
                 )
             }
         }
+        persistModelSettings()
     }
 
     fun onRoleSelected(roleId: Long) {
@@ -165,6 +197,7 @@ class ChatViewModel(
                     input = outgoingText,
                     selectedModelId = state.selectedModelId,
                     selectedRoleId = state.selectedRoleId,
+                    modelSettings = state.modelSettings,
                     onChatReady = { newChatId ->
                         chatIdFlow.value = newChatId
                         _uiState.update { it.copy(chatId = newChatId) }
@@ -226,6 +259,7 @@ class ChatViewModel(
                     input = userMessage.content,
                     selectedModelId = state.selectedModelId,
                     selectedRoleId = state.selectedRoleId,
+                    modelSettings = state.modelSettings,
                     addUserMessage = false
                 )
             }.onSuccess { newChatId ->
@@ -272,6 +306,7 @@ class ChatViewModel(
                     input = userMessage.content,
                     selectedModelId = state.selectedModelId,
                     selectedRoleId = state.selectedRoleId,
+                    modelSettings = state.modelSettings,
                     addUserMessage = false
                 )
             }.onSuccess { newChatId ->
@@ -299,6 +334,55 @@ class ChatViewModel(
         _uiState.update { it.copy(error = null) }
     }
 
+    fun setModelInfoOpen(isOpen: Boolean) {
+        _uiState.update { it.copy(isModelInfoOpen = isOpen) }
+    }
+
+    fun setModelSettingsOpen(isOpen: Boolean) {
+        _uiState.update { it.copy(isModelSettingsOpen = isOpen) }
+    }
+
+    fun updateMaxTokens(maxTokens: Int?) {
+        updateModelSettings { current ->
+            val limit = XaiModelLimits.forModel(_uiState.value.selectedModelId)?.contextWindowTokens
+            current.copy(maxTokens = maxTokens?.coerceIn(1, limit ?: 131_072))
+        }
+    }
+
+    fun updateTemperature(temperature: Double?) {
+        updateModelSettings { current -> current.copy(temperature = temperature?.coerceIn(0.0, 2.0)) }
+    }
+
+    fun updateTopP(topP: Double?) {
+        updateModelSettings { current -> current.copy(topP = topP?.coerceIn(0.0, 1.0)) }
+    }
+
+    fun updateFrequencyPenalty(frequencyPenalty: Double?) {
+        updateModelSettings { current ->
+            current.copy(frequencyPenalty = frequencyPenalty?.coerceIn(-2.0, 2.0))
+        }
+    }
+
+    fun updatePresencePenalty(presencePenalty: Double?) {
+        updateModelSettings { current ->
+            current.copy(presencePenalty = presencePenalty?.coerceIn(-2.0, 2.0))
+        }
+    }
+
+    fun updateReasoningEffort(reasoningEffort: ReasoningEffort?) {
+        updateModelSettings { current ->
+            current.copy(
+                reasoningEffort = reasoningEffort.takeIf {
+                    _uiState.value.selectedModelId.supportsReasoningEffort()
+                }
+            )
+        }
+    }
+
+    fun resetModelSettings() {
+        updateModelSettings { ChatModelSettings(chatId = it.chatId) }
+    }
+
     private fun updateAvailableModels(selectedModelId: String?) {
         val enabledModels = latestModels.filter { it.isEnabledForChat }
         val selectedModel = selectedModelId?.let { selected ->
@@ -311,7 +395,44 @@ class ChatViewModel(
         val available = (enabledModels + listOfNotNull(selectedModel))
             .distinctBy { it.id }
             .sortedBy { it.name.lowercase() }
-        _uiState.update { it.copy(availableModels = available) }
+        _uiState.update {
+            it.copy(
+                availableModels = available,
+                selectedModelLimits = XaiModelLimits.forModel(selectedModelId)
+            )
+        }
+    }
+
+    private fun updateModelSettings(transform: (ChatModelSettings) -> ChatModelSettings) {
+        _uiState.update { state ->
+            state.copy(
+                modelSettings = transform(state.modelSettings)
+                    .copy(chatId = state.chatId)
+                    .normalizedForModel(state.selectedModelId),
+                error = null
+            )
+        }
+        persistModelSettings()
+    }
+
+    private fun persistModelSettings() {
+        val state = _uiState.value
+        val chatId = state.chatId ?: return
+        viewModelScope.launch {
+            chatRepository.updateModelSettings(chatId, state.modelSettings.copy(chatId = chatId))
+        }
+    }
+
+    private fun ChatModelSettings.normalizedForModel(modelId: String?): ChatModelSettings {
+        val limit = XaiModelLimits.forModel(modelId)?.contextWindowTokens
+        return copy(
+            maxTokens = maxTokens?.coerceIn(1, limit ?: 131_072),
+            reasoningEffort = reasoningEffort.takeIf { modelId.supportsReasoningEffort() }
+        )
+    }
+
+    private fun String?.supportsReasoningEffort(): Boolean {
+        return orEmpty().lowercase().startsWith("grok-3-mini")
     }
 
     companion object {

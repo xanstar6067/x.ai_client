@@ -1,6 +1,7 @@
 package com.adam.xai_client.data.remote.api
 
 import com.adam.xai_client.data.remote.dto.ApiChatMessage
+import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.AiModel
 import kotlinx.coroutines.flow.Flow
 
@@ -19,13 +20,15 @@ interface XaiApiClient {
         apiKey: String,
         baseUrl: String,
         modelId: String,
-        messages: List<ApiChatMessage>
+        messages: List<ApiChatMessage>,
+        modelSettings: ChatModelSettings = ChatModelSettings()
     ): String
 
     fun streamChatRequest(
         apiKey: String,
         baseUrl: String,
         modelId: String,
-        messages: List<ApiChatMessage>
+        messages: List<ApiChatMessage>,
+        modelSettings: ChatModelSettings = ChatModelSettings()
     ): Flow<ChatStreamDelta>
 }

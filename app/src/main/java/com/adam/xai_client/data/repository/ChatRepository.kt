@@ -5,6 +5,7 @@ import com.adam.xai_client.data.local.database.AppDatabase
 import com.adam.xai_client.data.local.entity.ChatEntity
 import com.adam.xai_client.data.local.entity.MessageEntity
 import com.adam.xai_client.domain.model.Chat
+import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.MessageRole
 import kotlinx.coroutines.flow.Flow
@@ -16,6 +17,7 @@ class ChatRepository(
 ) {
     private val chatDao = database.chatDao()
     private val messageDao = database.messageDao()
+    private val chatModelSettingsDao = database.chatModelSettingsDao()
 
     val chats: Flow<List<Chat>> = chatDao.observeChats()
         .map { entities -> entities.map { it.asDomain() } }
@@ -34,6 +36,16 @@ class ChatRepository(
         } else {
             messageDao.observeMessages(chatId).map { entities ->
                 entities.map { it.asDomain() }
+            }
+        }
+    }
+
+    fun observeModelSettings(chatId: Long?): Flow<ChatModelSettings> {
+        return if (chatId == null) {
+            flowOf(ChatModelSettings())
+        } else {
+            chatModelSettingsDao.observeSettings(chatId).map { entity ->
+                entity?.asDomain() ?: ChatModelSettings(chatId = chatId)
             }
         }
     }
@@ -93,6 +105,24 @@ class ChatRepository(
 
     suspend fun getMessages(chatId: Long): List<Message> {
         return messageDao.getMessages(chatId).map { it.asDomain() }
+    }
+
+    suspend fun getModelSettings(chatId: Long): ChatModelSettings {
+        return chatModelSettingsDao.getSettings(chatId)?.asDomain()
+            ?: ChatModelSettings(chatId = chatId)
+    }
+
+    suspend fun updateModelSettings(
+        chatId: Long,
+        modelSettings: ChatModelSettings,
+        updatedAt: Long = System.currentTimeMillis()
+    ) {
+        chatModelSettingsDao.upsertSettings(
+            modelSettings.asEntity(
+                chatId = chatId,
+                updatedAt = updatedAt
+            )
+        )
     }
 
     suspend fun updateChatSelection(

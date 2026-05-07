@@ -7,9 +7,11 @@ import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.adam.xai_client.data.local.dao.AiModelDao
 import com.adam.xai_client.data.local.dao.ChatDao
+import com.adam.xai_client.data.local.dao.ChatModelSettingsDao
 import com.adam.xai_client.data.local.dao.MessageDao
 import com.adam.xai_client.data.local.dao.ModelRoleDao
 import com.adam.xai_client.data.local.entity.AiModelEntity
+import com.adam.xai_client.data.local.entity.ChatModelSettingsEntity
 import com.adam.xai_client.data.local.entity.ChatEntity
 import com.adam.xai_client.data.local.entity.MessageEntity
 import com.adam.xai_client.data.local.entity.ModelRoleEntity
@@ -19,9 +21,10 @@ import com.adam.xai_client.data.local.entity.ModelRoleEntity
         ChatEntity::class,
         MessageEntity::class,
         AiModelEntity::class,
-        ModelRoleEntity::class
+        ModelRoleEntity::class,
+        ChatModelSettingsEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -30,11 +33,33 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun aiModelDao(): AiModelDao
     abstract fun modelRoleDao(): ModelRoleDao
+    abstract fun chatModelSettingsDao(): ChatModelSettingsDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN reasoningContent TEXT")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS chat_model_settings (
+                        chatId INTEGER NOT NULL,
+                        maxTokens INTEGER,
+                        temperature REAL,
+                        topP REAL,
+                        frequencyPenalty REAL,
+                        presencePenalty REAL,
+                        reasoningEffort TEXT,
+                        updatedAt INTEGER NOT NULL,
+                        PRIMARY KEY(chatId),
+                        FOREIGN KEY(chatId) REFERENCES chats(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
             }
         }
     }
