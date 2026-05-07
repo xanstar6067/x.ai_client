@@ -6,6 +6,7 @@ data class Message(
     val role: MessageRole,
     val content: String,
     val reasoningContent: String? = null,
+    val tokenCount: Int = 0,
     val createdAt: Long
 )
 

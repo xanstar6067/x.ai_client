@@ -8,12 +8,14 @@ import com.adam.xai_client.domain.model.Chat
 import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.MessageRole
+import com.adam.xai_client.domain.token.TokenCounter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 class ChatRepository(
-    private val database: AppDatabase
+    private val database: AppDatabase,
+    private val tokenCounter: TokenCounter
 ) {
     private val chatDao = database.chatDao()
     private val messageDao = database.messageDao()
@@ -35,7 +37,7 @@ class ChatRepository(
             flowOf(emptyList())
         } else {
             messageDao.observeMessages(chatId).map { entities ->
-                entities.map { it.asDomain() }
+                entities.map { it.asDomainWithTokens() }
             }
         }
     }
@@ -80,6 +82,7 @@ class ChatRepository(
                 role = role,
                 content = content,
                 reasoningContent = reasoningContent,
+                tokenCount = tokenCounter.countMessage(content, reasoningContent),
                 createdAt = now
             )
         )
@@ -90,7 +93,26 @@ class ChatRepository(
         content: String,
         reasoningContent: String?
     ) {
-        messageDao.updateMessageContent(messageId, content, reasoningContent)
+        messageDao.updateMessageContent(
+            messageId = messageId,
+            content = content,
+            reasoningContent = reasoningContent,
+            tokenCount = tokenCounter.countMessage(content, reasoningContent)
+        )
+    }
+
+    suspend fun updateMessageText(
+        messageId: Long,
+        content: String,
+        reasoningContent: String?
+    ) {
+        val trimmedContent = content.trim()
+        messageDao.updateMessageContent(
+            messageId = messageId,
+            content = trimmedContent,
+            reasoningContent = reasoningContent,
+            tokenCount = tokenCounter.countMessage(trimmedContent, reasoningContent)
+        )
     }
 
     suspend fun deleteMessage(messageId: Long) {
@@ -104,7 +126,7 @@ class ChatRepository(
     }
 
     suspend fun getMessages(chatId: Long): List<Message> {
-        return messageDao.getMessages(chatId).map { it.asDomain() }
+        return messageDao.getMessages(chatId).map { it.asDomainWithTokens() }
     }
 
     suspend fun getModelSettings(chatId: Long): ChatModelSettings {
@@ -168,5 +190,11 @@ class ChatRepository(
                 )
             )
         }
+    }
+
+    private fun MessageEntity.asDomainWithTokens(): Message {
+        return asDomain().copy(
+            tokenCount = tokenCount ?: tokenCounter.countMessage(content, reasoningContent)
+        )
     }
 }

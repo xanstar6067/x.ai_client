@@ -24,7 +24,7 @@ import com.adam.xai_client.data.local.entity.ModelRoleEntity
         ModelRoleEntity::class,
         ChatModelSettingsEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -60,6 +60,12 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN tokenCount INTEGER")
             }
         }
     }

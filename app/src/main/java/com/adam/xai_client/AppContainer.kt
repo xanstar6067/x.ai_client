@@ -10,6 +10,7 @@ import com.adam.xai_client.data.repository.ChatRepository
 import com.adam.xai_client.data.repository.ModelRepository
 import com.adam.xai_client.data.repository.RoleRepository
 import com.adam.xai_client.data.repository.SettingsRepository
+import com.adam.xai_client.domain.token.TokenCounter
 import com.adam.xai_client.domain.usecase.SendMessageUseCase
 
 class AppContainer(context: Context) {
@@ -19,7 +20,11 @@ class AppContainer(context: Context) {
         appContext,
         AppDatabase::class.java,
         "xai_chat.db"
-    ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3).build()
+    ).addMigrations(
+        AppDatabase.MIGRATION_1_2,
+        AppDatabase.MIGRATION_2_3,
+        AppDatabase.MIGRATION_3_4
+    ).build()
 
     val settingsRepository: SettingsRepository = SettingsRepository(
         SettingsDataStore(appContext)
@@ -27,7 +32,9 @@ class AppContainer(context: Context) {
 
     val apiClient: XaiApiClient = KtorXaiApiClient()
 
-    val chatRepository: ChatRepository = ChatRepository(database)
+    val tokenCounter: TokenCounter = TokenCounter()
+
+    val chatRepository: ChatRepository = ChatRepository(database, tokenCounter)
 
     val roleRepository: RoleRepository = RoleRepository(
         modelRoleDao = database.modelRoleDao(),

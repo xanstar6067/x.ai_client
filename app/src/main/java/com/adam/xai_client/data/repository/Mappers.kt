@@ -26,6 +26,7 @@ internal fun MessageEntity.asDomain(): Message = Message(
     role = role,
     content = content,
     reasoningContent = reasoningContent,
+    tokenCount = tokenCount ?: 0,
     createdAt = createdAt
 )
 

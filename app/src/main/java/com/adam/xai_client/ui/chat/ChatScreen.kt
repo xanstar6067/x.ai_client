@@ -68,6 +68,7 @@ fun ChatScreen(
     onSend: () -> Unit,
     onRegenerate: () -> Unit,
     onResendMessage: (Long) -> Unit,
+    onUpdateMessage: (Long, String) -> Unit,
     onModelInfoOpenChange: (Boolean) -> Unit,
     onModelSettingsOpenChange: (Boolean) -> Unit,
     onMaxTokensChange: (Int?) -> Unit,
@@ -145,6 +146,10 @@ fun ChatScreen(
             if (state.isSending) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
+            TokenSummaryBar(
+                chatTokenCount = state.chatTokenCount,
+                inputTokenCount = state.inputTokenCount
+            )
             if (state.messages.isEmpty()) {
                 Column(
                     modifier = Modifier
@@ -185,17 +190,20 @@ fun ChatScreen(
                                 message.role == MessageRole.ASSISTANT,
                             canResend = !state.isSending &&
                                 message.role == MessageRole.USER,
+                            canEdit = !state.isSending,
                             onCopy = { text ->
                                 clipboardManager.setText(AnnotatedString(text))
                             },
                             onRegenerate = onRegenerate,
-                            onResend = { onResendMessage(message.id) }
+                            onResend = { onResendMessage(message.id) },
+                            onEdit = { text -> onUpdateMessage(message.id, text) }
                         )
                     }
                 }
             }
             ChatInput(
                 inputText = state.inputText,
+                inputTokenCount = state.inputTokenCount,
                 isSending = state.isSending,
                 onInputChange = onInputChange,
                 onSend = onSend
@@ -224,6 +232,30 @@ fun ChatScreen(
             onPresencePenaltyChange = onPresencePenaltyChange,
             onReasoningEffortChange = onReasoningEffortChange,
             onReset = onResetModelSettings
+        )
+    }
+}
+
+@Composable
+private fun TokenSummaryBar(
+    chatTokenCount: Int,
+    inputTokenCount: Int
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = "Чат: $chatTokenCount ток.",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = "Ввод: $inputTokenCount ток. | Всего: ${chatTokenCount + inputTokenCount} ток.",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -268,6 +300,7 @@ private fun ChatSelectors(
 @Composable
 private fun ChatInput(
     inputText: String,
+    inputTokenCount: Int,
     isSending: Boolean,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit
@@ -283,6 +316,7 @@ private fun ChatInput(
             onValueChange = onInputChange,
             modifier = Modifier.weight(1f),
             label = { Text("Сообщение") },
+            supportingText = { Text("Токены: $inputTokenCount") },
             minLines = 1,
             maxLines = 6
         )

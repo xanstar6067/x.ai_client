@@ -25,5 +25,6 @@ data class MessageEntity(
     val role: MessageRole,
     val content: String,
     val reasoningContent: String? = null,
+    val tokenCount: Int? = null,
     val createdAt: Long
 )

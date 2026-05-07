@@ -10,16 +10,20 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,9 +43,11 @@ fun MessageBubble(
     isPending: Boolean,
     canRegenerate: Boolean,
     canResend: Boolean,
+    canEdit: Boolean,
     onCopy: (String) -> Unit,
     onRegenerate: () -> Unit,
     onResend: () -> Unit,
+    onEdit: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isUser = message.role == MessageRole.USER
@@ -63,6 +69,8 @@ fun MessageBubble(
     var isReasoningExpanded by rememberSaveable(message.id) {
         mutableStateOf(message.content.isBlank())
     }
+    var isEditing by rememberSaveable(message.id) { mutableStateOf(false) }
+    var editedText by rememberSaveable(message.id) { mutableStateOf(message.content) }
 
     LaunchedEffect(message.id, message.content.isNotBlank(), isPending) {
         if (!isPending && message.content.isNotBlank()) {
@@ -106,11 +114,33 @@ fun MessageBubble(
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
-                    if (copyText.isNotBlank() || canRegenerate || canResend) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${message.tokenCount} ток.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = textColor.copy(alpha = 0.72f)
+                        )
                         Row(
                             horizontalArrangement = Arrangement.End,
-                            modifier = Modifier.fillMaxWidth()
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            if (canEdit) {
+                                IconButton(
+                                    onClick = {
+                                        editedText = message.content
+                                        isEditing = true
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Edit,
+                                        contentDescription = "Редактировать"
+                                    )
+                                }
+                            }
                             if (copyText.isNotBlank()) {
                                 IconButton(onClick = { onCopy(copyText) }) {
                                     Icon(
@@ -140,6 +170,37 @@ fun MessageBubble(
                 }
             }
         }
+    }
+
+    if (isEditing) {
+        AlertDialog(
+            onDismissRequest = { isEditing = false },
+            title = { Text("Редактировать сообщение") },
+            text = {
+                OutlinedTextField(
+                    value = editedText,
+                    onValueChange = { editedText = it },
+                    minLines = 3,
+                    maxLines = 10
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onEdit(editedText)
+                        isEditing = false
+                    },
+                    enabled = editedText.isNotBlank()
+                ) {
+                    Text("Сохранить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isEditing = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 }
 

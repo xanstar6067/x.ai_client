@@ -61,6 +61,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.room.runtime)
+    implementation(libs.jtokkit)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)

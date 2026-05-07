@@ -18,6 +18,7 @@ import com.adam.xai_client.domain.model.ModelLimits
 import com.adam.xai_client.domain.model.ModelRole
 import com.adam.xai_client.domain.model.ReasoningEffort
 import com.adam.xai_client.domain.model.XaiModelLimits
+import com.adam.xai_client.domain.token.TokenCounter
 import com.adam.xai_client.domain.usecase.MessageSendFailedException
 import com.adam.xai_client.domain.usecase.SendMessageUseCase
 import com.adam.xai_client.ui.components.toUserMessage
@@ -38,6 +39,8 @@ data class ChatUiState(
     val selectedRoleId: Long? = null,
     val modelSettings: ChatModelSettings = ChatModelSettings(),
     val selectedModelLimits: ModelLimits? = null,
+    val chatTokenCount: Int = 0,
+    val inputTokenCount: Int = 0,
     val availableModels: List<AiModel> = emptyList(),
     val availableRoles: List<ModelRole> = emptyList(),
     val isSending: Boolean = false,
@@ -53,7 +56,8 @@ class ChatViewModel(
     private val modelRepository: ModelRepository,
     private val roleRepository: RoleRepository,
     private val settingsRepository: SettingsRepository,
-    private val sendMessageUseCase: SendMessageUseCase
+    private val sendMessageUseCase: SendMessageUseCase,
+    private val tokenCounter: TokenCounter
 ) : ViewModel() {
     private val chatIdFlow = MutableStateFlow(initialChatId)
     private val _uiState = MutableStateFlow(ChatUiState(chatId = initialChatId))
@@ -97,7 +101,12 @@ class ChatViewModel(
         viewModelScope.launch {
             chatIdFlow.flatMapLatest { chatRepository.observeMessages(it) }
                 .collect { messages ->
-                    _uiState.update { it.copy(messages = messages) }
+                    _uiState.update {
+                        it.copy(
+                            messages = messages,
+                            chatTokenCount = messages.sumOf { message -> message.tokenCount }
+                        )
+                    }
                 }
         }
 
@@ -144,7 +153,33 @@ class ChatViewModel(
     }
 
     fun onInputChange(value: String) {
-        _uiState.update { it.copy(inputText = value, error = null) }
+        _uiState.update {
+            it.copy(
+                inputText = value,
+                inputTokenCount = tokenCounter.count(value),
+                error = null
+            )
+        }
+    }
+
+    fun updateMessageText(messageId: Long, content: String) {
+        viewModelScope.launch {
+            if (content.isBlank()) {
+                _uiState.update { it.copy(error = "Нельзя сохранить пустое сообщение.") }
+                return@launch
+            }
+            runCatching {
+                val message = _uiState.value.messages.firstOrNull { it.id == messageId }
+                chatRepository.updateMessageText(
+                    messageId = messageId,
+                    content = content,
+                    reasoningContent = message?.reasoningContent
+                )
+                _uiState.value.chatId?.let { chatRepository.touchChat(it) }
+            }.onFailure { throwable ->
+                _uiState.update { it.copy(error = throwable.toUserMessage()) }
+            }
+        }
     }
 
     fun onModelSelected(modelId: String) {
@@ -188,7 +223,7 @@ class ChatViewModel(
         viewModelScope.launch {
             val beforeSendChatId = _uiState.value.chatId
             val outgoingText = _uiState.value.inputText
-            _uiState.update { it.copy(isSending = true, error = null, inputText = "") }
+            _uiState.update { it.copy(isSending = true, error = null, inputText = "", inputTokenCount = 0) }
 
             runCatching {
                 val state = _uiState.value
@@ -225,6 +260,7 @@ class ChatViewModel(
                     it.copy(
                         chatId = failedChatId ?: it.chatId,
                         inputText = if (failedChatId == null) outgoingText else "",
+                        inputTokenCount = if (failedChatId == null) tokenCounter.count(outgoingText) else 0,
                         isSending = false,
                         error = throwable.toUserMessage()
                     )
@@ -447,7 +483,8 @@ class ChatViewModel(
                     modelRepository = container.modelRepository,
                     roleRepository = container.roleRepository,
                     settingsRepository = container.settingsRepository,
-                    sendMessageUseCase = container.sendMessageUseCase
+                    sendMessageUseCase = container.sendMessageUseCase,
+                    tokenCounter = container.tokenCounter
                 )
             }
         }
