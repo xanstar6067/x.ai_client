@@ -62,6 +62,9 @@ class ModelRepository(
     private fun knownXaiModels(): List<AiModel> = listOf(
         AiModel(id = "grok-4.20-multi-agent", name = "grok-4.20-multi-agent"),
         AiModel(id = "grok-4.20-reasoning", name = "grok-4.20-reasoning"),
-        AiModel(id = "grok-4.20-non-reasoning", name = "grok-4.20-non-reasoning")
+        AiModel(id = "grok-4.20-non-reasoning", name = "grok-4.20-non-reasoning"),
+        AiModel(id = "grok-imagine-image", name = "grok-imagine-image"),
+        AiModel(id = "grok-imagine-image-quality", name = "grok-imagine-image-quality"),
+        AiModel(id = "grok-imagine-image-pro", name = "grok-imagine-image-pro")
     )
 }

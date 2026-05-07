@@ -229,6 +229,8 @@ class ImageRepository(
 }
 
 private fun AiModel.isImageGenerationModel(): Boolean {
-    val searchable = "$id $name".lowercase()
-    return "image" in searchable || "imagine" in searchable
+    val normalizedId = id.lowercase()
+    val normalizedName = name.lowercase()
+    return normalizedId.startsWith("grok-imagine-image") ||
+        normalizedName.startsWith("grok-imagine-image")
 }
