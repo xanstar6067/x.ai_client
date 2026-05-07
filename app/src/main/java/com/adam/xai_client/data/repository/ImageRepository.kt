@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.room.withTransaction
 import com.adam.xai_client.data.local.database.AppDatabase
 import com.adam.xai_client.data.local.entity.ImageChatEntity
 import com.adam.xai_client.data.local.entity.ImageMessageEntity
@@ -47,7 +48,7 @@ class ImageRepository(
             flowOf(emptyList())
         } else {
             imageMessageDao.observeMessages(chatId).map { entities ->
-                entities.map { it.asDomain() }
+                entities.activePath().mapActivePathWithVersions(entities)
             }
         }
     }
@@ -96,6 +97,18 @@ class ImageRepository(
         imageMessageDao.deleteMessageById(messageId)
     }
 
+    suspend fun updateUserMessageText(messageId: Long, content: String) {
+        val trimmedContent = content.trim()
+        if (trimmedContent.isBlank()) {
+            throw IllegalArgumentException("Нельзя сохранить пустое сообщение.")
+        }
+        val message = imageMessageDao.getMessage(messageId) ?: return
+        if (message.role != MessageRole.USER) {
+            return
+        }
+        imageMessageDao.updateMessageContent(messageId, trimmedContent)
+    }
+
     suspend fun updateChatSelection(
         chatId: Long,
         selectedModelId: String?,
@@ -113,16 +126,22 @@ class ImageRepository(
     suspend fun addUserMessage(
         chatId: Long,
         content: String,
+        parentMessageId: Long? = null,
         now: Long = System.currentTimeMillis()
     ): Long {
-        return imageMessageDao.insertMessage(
-            ImageMessageEntity(
-                chatId = chatId,
-                role = MessageRole.USER,
-                content = content.trim(),
-                createdAt = now
+        return database.withTransaction {
+            val messageId = imageMessageDao.insertMessage(
+                ImageMessageEntity(
+                    chatId = chatId,
+                    role = MessageRole.USER,
+                    content = content.trim(),
+                    parentMessageId = parentMessageId,
+                    createdAt = now
+                )
             )
-        )
+            parentMessageId?.let { imageMessageDao.updateActiveChild(it, messageId) }
+            messageId
+        }
     }
 
     suspend fun addAssistantImageMessage(
@@ -130,19 +149,25 @@ class ImageRepository(
         content: String,
         image: GeneratedImage,
         sourceMessageId: Long?,
+        parentMessageId: Long? = null,
         now: Long = System.currentTimeMillis()
     ): Long {
-        return imageMessageDao.insertMessage(
-            ImageMessageEntity(
-                chatId = chatId,
-                role = MessageRole.ASSISTANT,
-                content = content,
-                imageBytes = image.bytes,
-                imageMimeType = image.mimeType,
-                sourceMessageId = sourceMessageId,
-                createdAt = now
+        return database.withTransaction {
+            val messageId = imageMessageDao.insertMessage(
+                ImageMessageEntity(
+                    chatId = chatId,
+                    role = MessageRole.ASSISTANT,
+                    content = content,
+                    imageBytes = image.bytes,
+                    imageMimeType = image.mimeType,
+                    sourceMessageId = sourceMessageId,
+                    parentMessageId = parentMessageId,
+                    createdAt = now
+                )
             )
-        )
+            parentMessageId?.let { imageMessageDao.updateActiveChild(it, messageId) }
+            messageId
+        }
     }
 
     suspend fun updateChatAfterGeneration(
@@ -162,7 +187,30 @@ class ImageRepository(
     }
 
     suspend fun getMessages(chatId: Long): List<ImageChatMessage> {
-        return imageMessageDao.getMessages(chatId).map { it.asDomain() }
+        val entities = imageMessageDao.getMessages(chatId)
+        return entities.activePath().mapActivePathWithVersions(entities)
+    }
+
+    suspend fun getVisibleTailMessageId(chatId: Long): Long? {
+        return imageMessageDao.getMessages(chatId).activePath().lastOrNull()?.id
+    }
+
+    suspend fun switchToSiblingVersion(messageId: Long, direction: Int) {
+        if (direction == 0) return
+        database.withTransaction {
+            val message = imageMessageDao.getMessage(messageId) ?: return@withTransaction
+            val parentId = message.parentMessageId ?: return@withTransaction
+            val siblings = imageMessageDao.getMessages(message.chatId)
+                .filter { it.parentMessageId == parentId && it.role == message.role }
+                .sortedWith(compareBy<ImageMessageEntity> { it.createdAt }.thenBy { it.id })
+            if (siblings.size <= 1) return@withTransaction
+            val currentIndex = siblings.indexOfFirst { it.id == messageId }
+            if (currentIndex < 0) return@withTransaction
+            val nextIndex = Math.floorMod(currentIndex + direction, siblings.size)
+            imageMessageDao.updateActiveChild(parentId, siblings[nextIndex].id)
+            val currentChat = imageChatDao.getChat(message.chatId) ?: return@withTransaction
+            imageChatDao.updateChat(currentChat.copy(updatedAt = System.currentTimeMillis()))
+        }
     }
 
     fun imageAsDataUrl(image: GeneratedImage): String {
@@ -229,6 +277,45 @@ class ImageRepository(
     private companion object {
         const val APP_PICTURES_DIR = "xAI Chat"
         const val NEW_CHAT_TITLE = "Новый image-чат"
+    }
+    private fun List<ImageMessageEntity>.activePath(): List<ImageMessageEntity> {
+        if (isEmpty()) return emptyList()
+        val byId = associateBy { it.id }
+        val byParent = groupBy { it.parentMessageId }
+        val result = mutableListOf<ImageMessageEntity>()
+        var parentId: Long? = null
+        val visited = mutableSetOf<Long>()
+        while (true) {
+            val children = byParent[parentId]
+                ?.sortedWith(compareBy<ImageMessageEntity> { it.createdAt }.thenBy { it.id })
+                .orEmpty()
+            if (children.isEmpty()) break
+            val activeChildId = parentId?.let { byId[it]?.activeChildMessageId }
+            val next = activeChildId
+                ?.let { id -> children.firstOrNull { it.id == id } }
+                ?: children.first()
+            if (!visited.add(next.id)) break
+            result += next
+            parentId = next.id
+        }
+        return result
+    }
+
+    private fun List<ImageMessageEntity>.mapActivePathWithVersions(
+        allMessages: List<ImageMessageEntity>
+    ): List<ImageChatMessage> {
+        val siblingGroups = allMessages
+            .groupBy { Pair(it.parentMessageId, it.role) }
+            .mapValues { (_, siblings) ->
+                siblings.sortedWith(compareBy<ImageMessageEntity> { it.createdAt }.thenBy { it.id })
+            }
+        return map { entity ->
+            val siblings = siblingGroups[Pair(entity.parentMessageId, entity.role)].orEmpty()
+            entity.asDomain().copy(
+                versionIndex = siblings.indexOfFirst { it.id == entity.id }.takeIf { it >= 0 }?.plus(1) ?: 1,
+                versionCount = siblings.size.coerceAtLeast(1)
+            )
+        }
     }
 }
 

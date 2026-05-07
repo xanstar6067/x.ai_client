@@ -10,11 +10,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -48,6 +50,8 @@ fun MessageBubble(
     onCopy: (String) -> Unit,
     onRegenerate: () -> Unit,
     onResend: () -> Unit,
+    onPreviousVersion: () -> Unit,
+    onNextVersion: () -> Unit,
     onEdit: (String) -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
@@ -65,7 +69,7 @@ fun MessageBubble(
     }
     val reasoning = message.reasoningContent.orEmpty().trim()
     val visibleContent = message.content.ifBlank {
-        if (reasoning.isNotBlank()) "" else if (isPending) "Ожидаю ответ..." else ""
+        if (reasoning.isNotBlank()) "" else if (isPending) "Waiting for response..." else ""
     }
     val copyText = message.content.trim()
     var isReasoningExpanded by rememberSaveable(message.id) {
@@ -123,7 +127,12 @@ fun MessageBubble(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "${message.tokenCount} ток.",
+                            text = buildString {
+                                append("${message.tokenCount} tok.")
+                                if (message.versionCount > 1) {
+                                    append(" ${message.versionIndex}/${message.versionCount}")
+                                }
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = textColor.copy(alpha = 0.72f)
                         )
@@ -138,40 +147,33 @@ fun MessageBubble(
                                         isEditing = true
                                     }
                                 ) {
-                                    Icon(
-                                        Icons.Filled.Edit,
-                                        contentDescription = "Редактировать"
-                                    )
+                                    Icon(Icons.Filled.Edit, contentDescription = "Edit")
                                 }
                             }
                             IconButton(onClick = { isDeleteConfirmationOpen = true }) {
-                                Icon(
-                                    Icons.Filled.Delete,
-                                    contentDescription = "Удалить"
-                                )
+                                Icon(Icons.Filled.Delete, contentDescription = "Delete")
                             }
                             if (copyText.isNotBlank()) {
                                 IconButton(onClick = { onCopy(copyText) }) {
-                                    Icon(
-                                        Icons.Filled.ContentCopy,
-                                        contentDescription = "Копировать"
-                                    )
+                                    Icon(Icons.Filled.ContentCopy, contentDescription = "Copy")
                                 }
                             }
                             if (canRegenerate) {
                                 IconButton(onClick = onRegenerate) {
-                                    Icon(
-                                        Icons.Filled.Refresh,
-                                        contentDescription = "Перегенерировать"
-                                    )
+                                    Icon(Icons.Filled.Refresh, contentDescription = "Regenerate")
+                                }
+                            }
+                            if (!isPending && message.versionCount > 1) {
+                                IconButton(onClick = onPreviousVersion) {
+                                    Icon(Icons.Filled.ChevronLeft, contentDescription = "Previous version")
+                                }
+                                IconButton(onClick = onNextVersion) {
+                                    Icon(Icons.Filled.ChevronRight, contentDescription = "Next version")
                                 }
                             }
                             if (canResend) {
                                 IconButton(onClick = onResend) {
-                                    Icon(
-                                        Icons.Filled.ArrowDownward,
-                                        contentDescription = "Отправить снова"
-                                    )
+                                    Icon(Icons.Filled.ArrowDownward, contentDescription = "Send again")
                                 }
                             }
                         }
@@ -184,7 +186,7 @@ fun MessageBubble(
     if (isEditing) {
         AlertDialog(
             onDismissRequest = { isEditing = false },
-            title = { Text("Редактировать сообщение") },
+            title = { Text("Edit message") },
             text = {
                 OutlinedTextField(
                     value = editedText,
@@ -201,12 +203,12 @@ fun MessageBubble(
                     },
                     enabled = editedText.isNotBlank()
                 ) {
-                    Text("Сохранить")
+                    Text("Save")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { isEditing = false }) {
-                    Text("Отмена")
+                    Text("Cancel")
                 }
             }
         )
@@ -215,8 +217,8 @@ fun MessageBubble(
     if (isDeleteConfirmationOpen) {
         AlertDialog(
             onDismissRequest = { isDeleteConfirmationOpen = false },
-            title = { Text("Удалить сообщение?") },
-            text = { Text("Сообщение будет удалено без восстановления.") },
+            title = { Text("Delete message?") },
+            text = { Text("The message will be deleted permanently.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -224,12 +226,12 @@ fun MessageBubble(
                         onDelete()
                     }
                 ) {
-                    Text("Удалить")
+                    Text("Delete")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { isDeleteConfirmationOpen = false }) {
-                    Text("Отмена")
+                    Text("Cancel")
                 }
             }
         )
@@ -244,15 +246,13 @@ private fun ReasoningBlock(
     onToggle: () -> Unit,
     onCopy: () -> Unit
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Размышления",
+                text = "Reasoning",
                 style = MaterialTheme.typography.labelMedium,
                 color = textColor.copy(alpha = 0.78f),
                 modifier = Modifier.weight(1f)
@@ -260,18 +260,14 @@ private fun ReasoningBlock(
             IconButton(onClick = onCopy) {
                 Icon(
                     Icons.Filled.ContentCopy,
-                    contentDescription = "Копировать размышления",
+                    contentDescription = "Copy reasoning",
                     tint = textColor.copy(alpha = 0.78f)
                 )
             }
             IconButton(onClick = onToggle) {
                 Icon(
                     if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = if (isExpanded) {
-                        "Свернуть размышления"
-                    } else {
-                        "Показать размышления"
-                    },
+                    contentDescription = if (isExpanded) "Collapse reasoning" else "Show reasoning",
                     tint = textColor.copy(alpha = 0.78f)
                 )
             }

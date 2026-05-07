@@ -14,6 +14,15 @@ interface ChatModelSettingsDao {
     @Query("SELECT * FROM chat_model_settings WHERE chatId = :chatId")
     suspend fun getSettings(chatId: Long): ChatModelSettingsEntity?
 
+    @Query("SELECT * FROM chat_model_settings ORDER BY chatId ASC")
+    suspend fun getAllSettings(): List<ChatModelSettingsEntity>
+
     @Upsert
     suspend fun upsertSettings(settings: ChatModelSettingsEntity)
+
+    @Upsert
+    suspend fun upsertSettings(settings: List<ChatModelSettingsEntity>)
+
+    @Query("DELETE FROM chat_model_settings")
+    suspend fun deleteAllSettings()
 }

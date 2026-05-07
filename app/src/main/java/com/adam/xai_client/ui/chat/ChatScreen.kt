@@ -68,8 +68,9 @@ fun ChatScreen(
     onModelSelected: (String) -> Unit,
     onRoleSelected: (Long) -> Unit,
     onSend: () -> Unit,
-    onRegenerate: () -> Unit,
+    onRegenerate: (Long) -> Unit,
     onResendMessage: (Long) -> Unit,
+    onSwitchMessageVersion: (Long, Int) -> Unit,
     onUpdateMessage: (Long, String) -> Unit,
     onDeleteMessage: (Long) -> Unit,
     onModelInfoOpenChange: (Boolean) -> Unit,
@@ -190,7 +191,6 @@ fun ChatScreen(
                                 message.content.isBlank() &&
                                 message.reasoningContent.isNullOrBlank(),
                             canRegenerate = !state.isSending &&
-                                isLastMessage &&
                                 message.role == MessageRole.ASSISTANT,
                             canResend = !state.isSending &&
                                 message.role == MessageRole.USER,
@@ -198,8 +198,10 @@ fun ChatScreen(
                             onCopy = { text ->
                                 clipboardManager.setText(AnnotatedString(text))
                             },
-                            onRegenerate = onRegenerate,
+                            onRegenerate = { onRegenerate(message.id) },
                             onResend = { onResendMessage(message.id) },
+                            onPreviousVersion = { onSwitchMessageVersion(message.id, -1) },
+                            onNextVersion = { onSwitchMessageVersion(message.id, 1) },
                             onEdit = { text -> onUpdateMessage(message.id, text) },
                             onDelete = { onDeleteMessage(message.id) }
                         )

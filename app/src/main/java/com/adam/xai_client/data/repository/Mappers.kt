@@ -31,6 +31,8 @@ internal fun MessageEntity.asDomain(): Message = Message(
     content = content,
     reasoningContent = reasoningContent,
     tokenCount = tokenCount ?: 0,
+    parentMessageId = parentMessageId,
+    activeChildMessageId = activeChildMessageId,
     createdAt = createdAt
 )
 
@@ -50,6 +52,8 @@ internal fun ImageMessageEntity.asDomain(): ImageChatMessage = ImageChatMessage(
     imageBytes = imageBytes,
     imageMimeType = imageMimeType,
     sourceMessageId = sourceMessageId,
+    parentMessageId = parentMessageId,
+    activeChildMessageId = activeChildMessageId,
     createdAt = createdAt
 )
 

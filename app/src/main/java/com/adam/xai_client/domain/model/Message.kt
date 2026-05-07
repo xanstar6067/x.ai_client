@@ -7,6 +7,10 @@ data class Message(
     val content: String,
     val reasoningContent: String? = null,
     val tokenCount: Int = 0,
+    val parentMessageId: Long? = null,
+    val activeChildMessageId: Long? = null,
+    val versionIndex: Int = 1,
+    val versionCount: Int = 1,
     val createdAt: Long
 )
 

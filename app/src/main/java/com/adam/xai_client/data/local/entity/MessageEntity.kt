@@ -16,7 +16,7 @@ import com.adam.xai_client.domain.model.MessageRole
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("chatId")]
+    indices = [Index("chatId"), Index("parentMessageId")]
 )
 data class MessageEntity(
     @PrimaryKey(autoGenerate = true)
@@ -26,5 +26,7 @@ data class MessageEntity(
     val content: String,
     val reasoningContent: String? = null,
     val tokenCount: Int? = null,
+    val parentMessageId: Long? = null,
+    val activeChildMessageId: Long? = null,
     val createdAt: Long
 )

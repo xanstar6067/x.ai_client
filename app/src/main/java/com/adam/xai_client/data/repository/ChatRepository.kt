@@ -37,7 +37,7 @@ class ChatRepository(
             flowOf(emptyList())
         } else {
             messageDao.observeMessages(chatId).map { entities ->
-                entities.map { it.asDomainWithTokens() }
+                entities.activePath().mapActivePathWithVersions(entities)
             }
         }
     }
@@ -74,18 +74,26 @@ class ChatRepository(
         role: MessageRole,
         content: String,
         reasoningContent: String? = null,
+        parentMessageId: Long? = null,
         now: Long = System.currentTimeMillis()
     ): Long {
-        return messageDao.insertMessage(
-            MessageEntity(
-                chatId = chatId,
-                role = role,
-                content = content,
-                reasoningContent = reasoningContent,
-                tokenCount = tokenCounter.countMessage(content, reasoningContent),
-                createdAt = now
+        return database.withTransaction {
+            val messageId = messageDao.insertMessage(
+                MessageEntity(
+                    chatId = chatId,
+                    role = role,
+                    content = content,
+                    reasoningContent = reasoningContent,
+                    tokenCount = tokenCounter.countMessage(content, reasoningContent),
+                    parentMessageId = parentMessageId,
+                    createdAt = now
+                )
             )
-        )
+            parentMessageId?.let { parentId ->
+                messageDao.updateActiveChild(parentId, messageId)
+            }
+            messageId
+        }
     }
 
     suspend fun updateMessageContent(
@@ -126,7 +134,42 @@ class ChatRepository(
     }
 
     suspend fun getMessages(chatId: Long): List<Message> {
-        return messageDao.getMessages(chatId).map { it.asDomainWithTokens() }
+        val entities = messageDao.getMessages(chatId)
+        return entities.activePath().mapActivePathWithVersions(entities)
+    }
+
+    suspend fun getMessageLineage(chatId: Long, messageId: Long): List<Message> {
+        val entities = messageDao.getMessages(chatId)
+        val byId = entities.associateBy { it.id }
+        val lineage = ArrayDeque<MessageEntity>()
+        var current = byId[messageId]
+        val visited = mutableSetOf<Long>()
+        while (current != null && visited.add(current.id)) {
+            lineage.addFirst(current)
+            current = current.parentMessageId?.let { byId[it] }
+        }
+        return lineage.toList().mapActivePathWithVersions(entities)
+    }
+
+    suspend fun getVisibleTailMessageId(chatId: Long): Long? {
+        return messageDao.getMessages(chatId).activePath().lastOrNull()?.id
+    }
+
+    suspend fun switchToSiblingVersion(messageId: Long, direction: Int) {
+        if (direction == 0) return
+        database.withTransaction {
+            val message = messageDao.getMessage(messageId) ?: return@withTransaction
+            val parentId = message.parentMessageId ?: return@withTransaction
+            val siblings = messageDao.getMessages(message.chatId)
+                .filter { it.parentMessageId == parentId && it.role == message.role }
+                .sortedWith(compareBy<MessageEntity> { it.createdAt }.thenBy { it.id })
+            if (siblings.size <= 1) return@withTransaction
+            val currentIndex = siblings.indexOfFirst { it.id == messageId }
+            if (currentIndex < 0) return@withTransaction
+            val nextIndex = Math.floorMod(currentIndex + direction, siblings.size)
+            messageDao.updateActiveChild(parentId, siblings[nextIndex].id)
+            touchChat(message.chatId)
+        }
     }
 
     suspend fun getModelSettings(chatId: Long): ChatModelSettings {
@@ -196,5 +239,45 @@ class ChatRepository(
         return asDomain().copy(
             tokenCount = tokenCount ?: tokenCounter.countMessage(content, reasoningContent)
         )
+    }
+
+    private fun List<MessageEntity>.activePath(): List<MessageEntity> {
+        if (isEmpty()) return emptyList()
+        val byId = associateBy { it.id }
+        val byParent = groupBy { it.parentMessageId }
+        val result = mutableListOf<MessageEntity>()
+        var parentId: Long? = null
+        val visited = mutableSetOf<Long>()
+        while (true) {
+            val children = byParent[parentId]
+                ?.sortedWith(compareBy<MessageEntity> { it.createdAt }.thenBy { it.id })
+                .orEmpty()
+            if (children.isEmpty()) break
+            val activeChildId = parentId?.let { byId[it]?.activeChildMessageId }
+            val next = activeChildId
+                ?.let { id -> children.firstOrNull { it.id == id } }
+                ?: children.first()
+            if (!visited.add(next.id)) break
+            result += next
+            parentId = next.id
+        }
+        return result
+    }
+
+    private fun List<MessageEntity>.mapActivePathWithVersions(
+        allMessages: List<MessageEntity>
+    ): List<Message> {
+        val siblingGroups = allMessages
+            .groupBy { Pair(it.parentMessageId, it.role) }
+            .mapValues { (_, siblings) ->
+                siblings.sortedWith(compareBy<MessageEntity> { it.createdAt }.thenBy { it.id })
+            }
+        return map { entity ->
+            val siblings = siblingGroups[Pair(entity.parentMessageId, entity.role)].orEmpty()
+            entity.asDomainWithTokens().copy(
+                versionIndex = siblings.indexOfFirst { it.id == entity.id }.takeIf { it >= 0 }?.plus(1) ?: 1,
+                versionCount = siblings.size.coerceAtLeast(1)
+            )
+        }
     }
 }

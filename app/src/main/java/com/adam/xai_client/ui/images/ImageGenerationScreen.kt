@@ -26,10 +26,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
@@ -90,9 +93,12 @@ fun ImageGenerationScreen(
     onImageSettingsOpenChange: (Boolean) -> Unit,
     onShowChatList: () -> Unit,
     onEditFromMessage: (Long) -> Unit,
+    onUpdateUserMessage: (Long, String) -> Unit,
     onDeleteMessage: (Long) -> Unit,
     onClearEditSource: () -> Unit,
     onGenerate: () -> Unit,
+    onRegenerate: (Long) -> Unit,
+    onSwitchMessageVersion: (Long, Int) -> Unit,
     onSave: (Long) -> Unit,
     onStoragePermissionDenied: () -> Unit,
     onBack: () -> Unit,
@@ -172,10 +178,13 @@ fun ImageGenerationScreen(
                 onModelSelected = onModelSelected,
                 onImageSettingsOpenChange = onImageSettingsOpenChange,
                 onEditFromMessage = onEditFromMessage,
+                onUpdateUserMessage = onUpdateUserMessage,
                 onDeleteMessage = onDeleteMessage,
                 onCopyMessage = { text -> clipboardManager.setText(AnnotatedString(text)) },
                 onClearEditSource = onClearEditSource,
                 onGenerate = onGenerate,
+                onRegenerate = onRegenerate,
+                onSwitchMessageVersion = onSwitchMessageVersion,
                 onSaveRequested = { messageId ->
                     if (requiresWritePermission(context)) {
                         pendingSaveMessageId = messageId
@@ -322,10 +331,13 @@ private fun ImageChatContent(
     onModelSelected: (String) -> Unit,
     onImageSettingsOpenChange: (Boolean) -> Unit,
     onEditFromMessage: (Long) -> Unit,
+    onUpdateUserMessage: (Long, String) -> Unit,
     onDeleteMessage: (Long) -> Unit,
     onCopyMessage: (String) -> Unit,
     onClearEditSource: () -> Unit,
     onGenerate: () -> Unit,
+    onRegenerate: (Long) -> Unit,
+    onSwitchMessageVersion: (Long, Int) -> Unit,
     onSaveRequested: (Long) -> Unit
 ) {
     Column(
@@ -374,7 +386,11 @@ private fun ImageChatContent(
                         isGenerating = state.isGenerating,
                         onCopy = { onCopyMessage(message.content) },
                         onEdit = { onEditFromMessage(message.id) },
+                        onUpdateUserMessage = { text -> onUpdateUserMessage(message.id, text) },
                         onDelete = { onDeleteMessage(message.id) },
+                        onRegenerate = { onRegenerate(message.id) },
+                        onPreviousVersion = { onSwitchMessageVersion(message.id, -1) },
+                        onNextVersion = { onSwitchMessageVersion(message.id, 1) },
                         onSave = { onSaveRequested(message.id) }
                     )
                 }
@@ -516,10 +532,16 @@ private fun ImageMessageCard(
     isGenerating: Boolean,
     onCopy: () -> Unit,
     onEdit: () -> Unit,
+    onUpdateUserMessage: (String) -> Unit,
     onDelete: () -> Unit,
+    onRegenerate: () -> Unit,
+    onPreviousVersion: () -> Unit,
+    onNextVersion: () -> Unit,
     onSave: () -> Unit
 ) {
     var isDeleteConfirmationOpen by remember(message.id) { mutableStateOf(false) }
+    var isTextEditOpen by remember(message.id) { mutableStateOf(false) }
+    var editedText by remember(message.id) { mutableStateOf(message.content) }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -569,9 +591,47 @@ private fun ImageMessageCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (message.versionCount > 1) {
+                    Text(
+                        text = "${message.versionIndex}/${message.versionCount}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    IconButton(
+                        onClick = onPreviousVersion,
+                        enabled = !isGenerating
+                    ) {
+                        Icon(Icons.Default.ChevronLeft, contentDescription = "Previous version")
+                    }
+                    IconButton(
+                        onClick = onNextVersion,
+                        enabled = !isGenerating
+                    ) {
+                        Icon(Icons.Default.ChevronRight, contentDescription = "Next version")
+                    }
+                }
                 if (message.content.isNotBlank()) {
                     IconButton(onClick = onCopy) {
                         Icon(Icons.Default.ContentCopy, contentDescription = "Копировать")
+                    }
+                }
+                if (message.role == MessageRole.USER) {
+                    IconButton(
+                        onClick = {
+                            editedText = message.content
+                            isTextEditOpen = true
+                        },
+                        enabled = !isGenerating
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "Редактировать")
+                    }
+                }
+                if (message.role == MessageRole.ASSISTANT) {
+                    IconButton(
+                        onClick = onRegenerate,
+                        enabled = !isGenerating
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Regenerate")
                     }
                 }
                 IconButton(
@@ -601,6 +661,37 @@ private fun ImageMessageCard(
             },
             dismissButton = {
                 TextButton(onClick = { isDeleteConfirmationOpen = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
+    }
+
+    if (isTextEditOpen) {
+        AlertDialog(
+            onDismissRequest = { isTextEditOpen = false },
+            title = { Text("Редактировать сообщение") },
+            text = {
+                OutlinedTextField(
+                    value = editedText,
+                    onValueChange = { editedText = it },
+                    minLines = 3,
+                    maxLines = 10
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onUpdateUserMessage(editedText)
+                        isTextEditOpen = false
+                    },
+                    enabled = editedText.isNotBlank()
+                ) {
+                    Text("Сохранить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isTextEditOpen = false }) {
                     Text("Отмена")
                 }
             }

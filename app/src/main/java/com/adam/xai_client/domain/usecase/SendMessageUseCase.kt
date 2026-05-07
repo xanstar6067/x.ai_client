@@ -22,7 +22,8 @@ class SendMessageUseCase(
         selectedRoleId: Long?,
         modelSettings: ChatModelSettings = ChatModelSettings(),
         onChatReady: suspend (Long) -> Unit = {},
-        addUserMessage: Boolean = true
+        addUserMessage: Boolean = true,
+        parentMessageId: Long? = null
     ): Long {
         val text = input.trim()
         if (text.isBlank()) {
@@ -59,19 +60,24 @@ class SendMessageUseCase(
             chatRepository.updateModelSettings(targetChatId, effectiveModelSettings, now)
         }
 
-        if (addUserMessage) {
+        val userMessageId = if (addUserMessage) {
+            val userParentMessageId = parentMessageId ?: chatRepository.getVisibleTailMessageId(targetChatId)
             chatRepository.addMessage(
                 chatId = targetChatId,
                 role = MessageRole.USER,
                 content = text,
+                parentMessageId = userParentMessageId,
                 now = now
             )
+        } else {
+            parentMessageId
         }
         onChatReady(targetChatId)
         settingsRepository.setLastSelectedModelId(modelId)
         settingsRepository.setLastSelectedRoleId(effectiveRoleId)
 
-        val history = chatRepository.getMessages(targetChatId)
+        val history = userMessageId?.let { chatRepository.getMessageLineage(targetChatId, it) }
+            ?: chatRepository.getMessages(targetChatId)
         val contextHistory = effectiveModelSettings.contextMessageLimit
             .takeIf { it > 0 }
             ?.let { limit -> history.takeLast(limit) }
@@ -97,6 +103,7 @@ class SendMessageUseCase(
             chatId = targetChatId,
             role = MessageRole.ASSISTANT,
             content = "",
+            parentMessageId = userMessageId,
             now = System.currentTimeMillis()
         )
 

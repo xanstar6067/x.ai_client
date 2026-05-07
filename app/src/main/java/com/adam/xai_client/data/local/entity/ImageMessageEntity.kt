@@ -16,7 +16,7 @@ import com.adam.xai_client.domain.model.MessageRole
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("chatId")]
+    indices = [Index("chatId"), Index("parentMessageId")]
 )
 data class ImageMessageEntity(
     @PrimaryKey(autoGenerate = true)
@@ -27,5 +27,7 @@ data class ImageMessageEntity(
     val imageBytes: ByteArray? = null,
     val imageMimeType: String? = null,
     val sourceMessageId: Long? = null,
+    val parentMessageId: Long? = null,
+    val activeChildMessageId: Long? = null,
     val createdAt: Long
 )

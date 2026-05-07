@@ -16,6 +16,10 @@ data class ImageChatMessage(
     val imageBytes: ByteArray? = null,
     val imageMimeType: String? = null,
     val sourceMessageId: Long? = null,
+    val parentMessageId: Long? = null,
+    val activeChildMessageId: Long? = null,
+    val versionIndex: Int = 1,
+    val versionCount: Int = 1,
     val createdAt: Long
 ) {
     val generatedImage: GeneratedImage?
@@ -37,6 +41,10 @@ data class ImageChatMessage(
             imageBytes.contentEquals(other.imageBytes) &&
             imageMimeType == other.imageMimeType &&
             sourceMessageId == other.sourceMessageId &&
+            parentMessageId == other.parentMessageId &&
+            activeChildMessageId == other.activeChildMessageId &&
+            versionIndex == other.versionIndex &&
+            versionCount == other.versionCount &&
             createdAt == other.createdAt
     }
 
@@ -48,6 +56,10 @@ data class ImageChatMessage(
         result = 31 * result + (imageBytes?.contentHashCode() ?: 0)
         result = 31 * result + (imageMimeType?.hashCode() ?: 0)
         result = 31 * result + (sourceMessageId?.hashCode() ?: 0)
+        result = 31 * result + (parentMessageId?.hashCode() ?: 0)
+        result = 31 * result + (activeChildMessageId?.hashCode() ?: 0)
+        result = 31 * result + versionIndex
+        result = 31 * result + versionCount
         result = 31 * result + createdAt.hashCode()
         return result
     }

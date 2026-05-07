@@ -30,7 +30,7 @@ import com.adam.xai_client.data.local.entity.ModelRoleEntity
         ImageChatEntity::class,
         ImageMessageEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -112,6 +112,45 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE chat_model_settings ADD COLUMN contextMessageLimit INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN parentMessageId INTEGER")
+                db.execSQL("ALTER TABLE messages ADD COLUMN activeChildMessageId INTEGER")
+                db.execSQL("ALTER TABLE image_messages ADD COLUMN parentMessageId INTEGER")
+                db.execSQL("ALTER TABLE image_messages ADD COLUMN activeChildMessageId INTEGER")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_messages_parentMessageId ON messages(parentMessageId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_image_messages_parentMessageId ON image_messages(parentMessageId)")
+                linkLinearHistory(db, "messages")
+                linkLinearHistory(db, "image_messages")
+            }
+        }
+
+        private fun linkLinearHistory(db: SupportSQLiteDatabase, tableName: String) {
+            db.query("SELECT id, chatId FROM $tableName ORDER BY chatId ASC, createdAt ASC, id ASC").use { cursor ->
+                var currentChatId: Long? = null
+                var previousMessageId: Long? = null
+                while (cursor.moveToNext()) {
+                    val messageId = cursor.getLong(0)
+                    val chatId = cursor.getLong(1)
+                    if (currentChatId != chatId) {
+                        currentChatId = chatId
+                        previousMessageId = null
+                    }
+                    previousMessageId?.let { parentId ->
+                        db.execSQL(
+                            "UPDATE $tableName SET parentMessageId = ? WHERE id = ?",
+                            arrayOf(parentId, messageId)
+                        )
+                        db.execSQL(
+                            "UPDATE $tableName SET activeChildMessageId = ? WHERE id = ?",
+                            arrayOf(messageId, parentId)
+                        )
+                    }
+                    previousMessageId = messageId
+                }
             }
         }
     }

@@ -9,6 +9,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.adam.xai_client.AppContainer
+import com.adam.xai_client.ui.backup.BackupScreen
+import com.adam.xai_client.ui.backup.BackupViewModel
 import com.adam.xai_client.ui.chat.ChatScreen
 import com.adam.xai_client.ui.chat.ChatViewModel
 import com.adam.xai_client.ui.chatlist.ChatListScreen
@@ -44,6 +46,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 onOpenModels = { navController.navigate(Screen.Models.route) },
                 onOpenRoles = { navController.navigate(Screen.Roles.route) },
                 onOpenImages = { navController.navigate(Screen.Images.route) },
+                onOpenBackups = { navController.navigate(Screen.Backups.route) },
                 onErrorShown = viewModel::clearError
             )
         }
@@ -68,8 +71,9 @@ fun XaiChatNavHost(container: AppContainer) {
                         }
                     }
                 },
-                onRegenerate = viewModel::regenerateLastResponse,
+                onRegenerate = viewModel::regenerateResponse,
                 onResendMessage = viewModel::resendFromUserMessage,
+                onSwitchMessageVersion = viewModel::switchMessageVersion,
                 onUpdateMessage = viewModel::updateMessageText,
                 onDeleteMessage = viewModel::deleteMessage,
                 onModelInfoOpenChange = viewModel::setModelInfoOpen,
@@ -103,8 +107,9 @@ fun XaiChatNavHost(container: AppContainer) {
                 onModelSelected = viewModel::onModelSelected,
                 onRoleSelected = viewModel::onRoleSelected,
                 onSend = { viewModel.sendMessage {} },
-                onRegenerate = viewModel::regenerateLastResponse,
+                onRegenerate = viewModel::regenerateResponse,
                 onResendMessage = viewModel::resendFromUserMessage,
+                onSwitchMessageVersion = viewModel::switchMessageVersion,
                 onUpdateMessage = viewModel::updateMessageText,
                 onDeleteMessage = viewModel::deleteMessage,
                 onModelInfoOpenChange = viewModel::setModelInfoOpen,
@@ -186,11 +191,28 @@ fun XaiChatNavHost(container: AppContainer) {
                 onImageSettingsOpenChange = viewModel::setImageSettingsOpen,
                 onShowChatList = viewModel::showChatList,
                 onEditFromMessage = viewModel::editFromMessage,
+                onUpdateUserMessage = viewModel::updateUserMessageText,
                 onDeleteMessage = viewModel::deleteMessage,
                 onClearEditSource = viewModel::clearEditSource,
                 onGenerate = viewModel::generate,
+                onRegenerate = viewModel::regenerateResponse,
+                onSwitchMessageVersion = viewModel::switchMessageVersion,
                 onSave = viewModel::save,
                 onStoragePermissionDenied = viewModel::onStoragePermissionDenied,
+                onBack = { navController.popBackStack() },
+                onMessageShown = viewModel::clearTransientMessages
+            )
+        }
+
+        composable(Screen.Backups.route) {
+            val viewModel: BackupViewModel = viewModel(
+                factory = BackupViewModel.factory(container)
+            )
+            val state = viewModel.uiState.collectAsStateWithLifecycle().value
+            BackupScreen(
+                state = state,
+                onExport = viewModel::exportBackup,
+                onImport = viewModel::importBackup,
                 onBack = { navController.popBackStack() },
                 onMessageShown = viewModel::clearTransientMessages
             )
@@ -205,6 +227,7 @@ private sealed class Screen(val route: String) {
     data object Models : Screen("models")
     data object Roles : Screen("roles")
     data object Images : Screen("images")
+    data object Backups : Screen("backups")
 
     data object Chat : Screen("chat/{chatId}") {
         const val ARG_CHAT_ID = "chatId"

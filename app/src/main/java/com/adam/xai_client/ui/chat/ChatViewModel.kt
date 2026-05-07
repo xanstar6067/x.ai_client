@@ -282,11 +282,21 @@ class ChatViewModel(
     }
 
     fun regenerateLastResponse() {
+        val messageId = _uiState.value.messages
+            .lastOrNull { it.role == MessageRole.ASSISTANT }
+            ?.id
+            ?: return
+        regenerateResponse(messageId)
+    }
+
+    fun regenerateResponse(messageId: Long) {
         viewModelScope.launch {
             val state = _uiState.value
             if (state.isSending || state.chatId == null) return@launch
 
-            val assistantIndex = state.messages.indexOfLast { it.role == MessageRole.ASSISTANT }
+            val assistantIndex = state.messages.indexOfFirst {
+                it.id == messageId && it.role == MessageRole.ASSISTANT
+            }
             if (assistantIndex <= 0) return@launch
 
             val userMessage = state.messages
@@ -294,21 +304,16 @@ class ChatViewModel(
                 .lastOrNull { it.role == MessageRole.USER }
                 ?: return@launch
 
-            val trailingAssistantIds = state.messages
-                .drop(assistantIndex)
-                .filter { it.role == MessageRole.ASSISTANT }
-                .map { it.id }
-
             _uiState.update { it.copy(isSending = true, error = null) }
             runCatching {
-                chatRepository.deleteMessages(trailingAssistantIds)
                 sendMessageUseCase(
                     chatId = state.chatId,
                     input = userMessage.content,
                     selectedModelId = state.selectedModelId,
                     selectedRoleId = state.selectedRoleId,
                     modelSettings = state.modelSettings,
-                    addUserMessage = false
+                    addUserMessage = false,
+                    parentMessageId = userMessage.id
                 )
             }.onSuccess { newChatId ->
                 chatIdFlow.value = newChatId
@@ -342,20 +347,17 @@ class ChatViewModel(
             if (userIndex < 0) return@launch
 
             val userMessage = state.messages[userIndex]
-            val trailingMessageIds = state.messages
-                .drop(userIndex + 1)
-                .map { it.id }
 
             _uiState.update { it.copy(isSending = true, error = null) }
             runCatching {
-                chatRepository.deleteMessages(trailingMessageIds)
                 sendMessageUseCase(
                     chatId = state.chatId,
                     input = userMessage.content,
                     selectedModelId = state.selectedModelId,
                     selectedRoleId = state.selectedRoleId,
                     modelSettings = state.modelSettings,
-                    addUserMessage = false
+                    addUserMessage = false,
+                    parentMessageId = userMessage.id
                 )
             }.onSuccess { newChatId ->
                 chatIdFlow.value = newChatId
@@ -424,6 +426,18 @@ class ChatViewModel(
                     _uiState.value.selectedModelId.supportsReasoningEffort()
                 }
             )
+        }
+    }
+
+    fun switchMessageVersion(messageId: Long, direction: Int) {
+        viewModelScope.launch {
+            val state = _uiState.value
+            if (state.isSending) return@launch
+            runCatching {
+                chatRepository.switchToSiblingVersion(messageId, direction)
+            }.onFailure { throwable ->
+                _uiState.update { it.copy(error = throwable.toUserMessage()) }
+            }
         }
     }
 

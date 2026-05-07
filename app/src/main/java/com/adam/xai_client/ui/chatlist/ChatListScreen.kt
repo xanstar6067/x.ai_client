@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Settings
@@ -56,6 +57,7 @@ fun ChatListScreen(
     onOpenModels: () -> Unit,
     onOpenRoles: () -> Unit,
     onOpenImages: () -> Unit,
+    onOpenBackups: () -> Unit,
     onErrorShown: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -80,6 +82,9 @@ fun ChatListScreen(
                     }
                     IconButton(onClick = onOpenRoles) {
                         Icon(Icons.Default.Psychology, contentDescription = "Роли")
+                    }
+                    IconButton(onClick = onOpenBackups) {
+                        Icon(Icons.Default.Backup, contentDescription = "Backups")
                     }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Настройки")
