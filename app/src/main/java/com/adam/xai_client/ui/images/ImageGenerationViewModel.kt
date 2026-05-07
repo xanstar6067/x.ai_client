@@ -103,6 +103,14 @@ class ImageGenerationViewModel(
 
     fun onModelSelected(modelId: String) {
         _uiState.update { it.copy(selectedModelId = modelId, error = null, message = null) }
+        viewModelScope.launch {
+            _uiState.value.selectedChatId?.let { chatId ->
+                imageRepository.updateChatSelection(
+                    chatId = chatId,
+                    selectedModelId = modelId
+                )
+            }
+        }
     }
 
     fun onChatSelected(chatId: Long?) {

@@ -18,19 +18,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -128,15 +128,6 @@ fun ImageGenerationScreen(
                     }
                 }
             )
-        },
-        bottomBar = {
-            ImagePromptBar(
-                state = state,
-                onPromptChange = onPromptChange,
-                onSourceImageUrlChange = onSourceImageUrlChange,
-                onClearEditSource = onClearEditSource,
-                onGenerate = onGenerate
-            )
         }
     ) { padding ->
         Column(
@@ -160,12 +151,24 @@ fun ImageGenerationScreen(
             )
 
             if (state.imageModels.isEmpty()) {
-                EmptyHint("Включите модель с image или imagine в названии на странице моделей.")
+                EmptyHint(
+                    text = "Включите модель с image или imagine в названии на странице моделей.",
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                )
             } else if (state.messages.isEmpty()) {
-                EmptyHint("Опишите изображение ниже. После генерации чат сохранится здесь.")
+                EmptyHint(
+                    text = "Опишите изображение ниже. После генерации чат сохранится здесь.",
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                )
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
                     contentPadding = PaddingValues(bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -189,6 +192,14 @@ fun ImageGenerationScreen(
                     }
                 }
             }
+
+            ImagePromptBar(
+                state = state,
+                onPromptChange = onPromptChange,
+                onSourceImageUrlChange = onSourceImageUrlChange,
+                onClearEditSource = onClearEditSource,
+                onGenerate = onGenerate
+            )
         }
     }
 }
@@ -255,7 +266,7 @@ private fun ImagePromptBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .navigationBarsPadding(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         state.editingMessageId?.let {
@@ -288,15 +299,14 @@ private fun ImagePromptBar(
                 maxLines = 4,
                 modifier = Modifier.weight(1f)
             )
-            Button(
+            IconButton(
                 onClick = onGenerate,
                 enabled = !state.isGenerating &&
                     state.prompt.isNotBlank() &&
-                    state.selectedModelId != null
+                    state.selectedModelId != null,
+                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
             ) {
-                Icon(Icons.Filled.AutoFixHigh, contentDescription = null)
-                Spacer(Modifier.padding(3.dp))
-                Text("Отправить")
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
             }
         }
     }
@@ -381,9 +391,12 @@ private fun ImagePreview(image: GeneratedImage) {
 }
 
 @Composable
-private fun EmptyHint(text: String) {
+private fun EmptyHint(
+    text: String,
+    modifier: Modifier = Modifier
+) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
         Text(

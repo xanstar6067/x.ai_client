@@ -92,6 +92,20 @@ class ImageRepository(
         imageChatDao.deleteChatById(chatId)
     }
 
+    suspend fun updateChatSelection(
+        chatId: Long,
+        selectedModelId: String?,
+        updatedAt: Long = System.currentTimeMillis()
+    ) {
+        val current = imageChatDao.getChat(chatId) ?: return
+        imageChatDao.updateChat(
+            current.copy(
+                selectedModelId = selectedModelId,
+                updatedAt = updatedAt
+            )
+        )
+    }
+
     suspend fun addUserMessage(
         chatId: Long,
         content: String,
