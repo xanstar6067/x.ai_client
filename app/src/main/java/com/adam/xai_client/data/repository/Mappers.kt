@@ -23,6 +23,7 @@ internal fun MessageEntity.asDomain(): Message = Message(
     chatId = chatId,
     role = role,
     content = content,
+    reasoningContent = reasoningContent,
     createdAt = createdAt
 )
 

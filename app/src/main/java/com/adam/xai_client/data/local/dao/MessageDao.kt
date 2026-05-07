@@ -16,4 +16,17 @@ interface MessageDao {
 
     @Insert
     suspend fun insertMessage(message: MessageEntity): Long
+
+    @Query("UPDATE messages SET content = :content, reasoningContent = :reasoningContent WHERE id = :messageId")
+    suspend fun updateMessageContent(
+        messageId: Long,
+        content: String,
+        reasoningContent: String?
+    )
+
+    @Query("DELETE FROM messages WHERE id = :messageId")
+    suspend fun deleteMessageById(messageId: Long)
+
+    @Query("DELETE FROM messages WHERE id IN (:messageIds)")
+    suspend fun deleteMessagesByIds(messageIds: List<Long>)
 }

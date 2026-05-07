@@ -19,7 +19,7 @@ class AppContainer(context: Context) {
         appContext,
         AppDatabase::class.java,
         "xai_chat.db"
-    ).build()
+    ).addMigrations(AppDatabase.MIGRATION_1_2).build()
 
     val settingsRepository: SettingsRepository = SettingsRepository(
         SettingsDataStore(appContext)

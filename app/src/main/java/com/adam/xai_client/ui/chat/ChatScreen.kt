@@ -30,9 +30,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.AiModel
+import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.ModelRole
 import com.adam.xai_client.ui.components.DropdownSelector
 import com.adam.xai_client.ui.components.MessageBubble
@@ -46,11 +49,13 @@ fun ChatScreen(
     onModelSelected: (String) -> Unit,
     onRoleSelected: (Long) -> Unit,
     onSend: () -> Unit,
+    onRegenerate: () -> Unit,
     onBack: () -> Unit,
     onErrorShown: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
+    val clipboardManager = LocalClipboardManager.current
     TransientSnackbar(
         message = state.error,
         snackbarHostState = snackbarHostState,
@@ -126,7 +131,22 @@ fun ChatScreen(
                         items = state.messages,
                         key = { it.id }
                     ) { message ->
-                        MessageBubble(message = message)
+                        val isLastMessage = message.id == state.messages.lastOrNull()?.id
+                        MessageBubble(
+                            message = message,
+                            isPending = state.isSending &&
+                                isLastMessage &&
+                                message.role == MessageRole.ASSISTANT &&
+                                message.content.isBlank() &&
+                                message.reasoningContent.isNullOrBlank(),
+                            canRegenerate = !state.isSending &&
+                                isLastMessage &&
+                                message.role == MessageRole.ASSISTANT,
+                            onCopy = { text ->
+                                clipboardManager.setText(AnnotatedString(text))
+                            },
+                            onRegenerate = onRegenerate
+                        )
                     }
                 }
             }

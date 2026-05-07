@@ -59,6 +59,7 @@ class ChatRepository(
         chatId: Long,
         role: MessageRole,
         content: String,
+        reasoningContent: String? = null,
         now: Long = System.currentTimeMillis()
     ): Long {
         return messageDao.insertMessage(
@@ -66,9 +67,28 @@ class ChatRepository(
                 chatId = chatId,
                 role = role,
                 content = content,
+                reasoningContent = reasoningContent,
                 createdAt = now
             )
         )
+    }
+
+    suspend fun updateMessageContent(
+        messageId: Long,
+        content: String,
+        reasoningContent: String?
+    ) {
+        messageDao.updateMessageContent(messageId, content, reasoningContent)
+    }
+
+    suspend fun deleteMessage(messageId: Long) {
+        messageDao.deleteMessageById(messageId)
+    }
+
+    suspend fun deleteMessages(messageIds: List<Long>) {
+        if (messageIds.isNotEmpty()) {
+            messageDao.deleteMessagesByIds(messageIds)
+        }
     }
 
     suspend fun getMessages(chatId: Long): List<Message> {

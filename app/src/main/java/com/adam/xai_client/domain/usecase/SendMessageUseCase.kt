@@ -6,6 +6,7 @@ import com.adam.xai_client.data.repository.ChatRepository
 import com.adam.xai_client.data.repository.RoleRepository
 import com.adam.xai_client.data.repository.SettingsRepository
 import com.adam.xai_client.domain.model.MessageRole
+import kotlinx.coroutines.flow.collect
 
 class SendMessageUseCase(
     private val chatRepository: ChatRepository,
@@ -17,7 +18,9 @@ class SendMessageUseCase(
         chatId: Long?,
         input: String,
         selectedModelId: String?,
-        selectedRoleId: Long?
+        selectedRoleId: Long?,
+        onChatReady: suspend (Long) -> Unit = {},
+        addUserMessage: Boolean = true
     ): Long {
         val text = input.trim()
         if (text.isBlank()) {
@@ -50,12 +53,15 @@ class SendMessageUseCase(
             )
         }
 
-        chatRepository.addMessage(
-            chatId = targetChatId,
-            role = MessageRole.USER,
-            content = text,
-            now = now
-        )
+        if (addUserMessage) {
+            chatRepository.addMessage(
+                chatId = targetChatId,
+                role = MessageRole.USER,
+                content = text,
+                now = now
+            )
+        }
+        onChatReady(targetChatId)
         settingsRepository.setLastSelectedModelId(modelId)
         settingsRepository.setLastSelectedRoleId(effectiveRoleId)
 
@@ -77,14 +83,36 @@ class SendMessageUseCase(
                 }
         }
 
-        val assistantReply = try {
-            apiClient.sendChatRequest(
+        val assistantMessageId = chatRepository.addMessage(
+            chatId = targetChatId,
+            role = MessageRole.ASSISTANT,
+            content = "",
+            now = System.currentTimeMillis()
+        )
+
+        val assistantReply = StringBuilder()
+        val reasoningContent = StringBuilder()
+        try {
+            apiClient.streamChatRequest(
                 apiKey = settings.apiKey,
                 baseUrl = settings.baseUrl,
                 modelId = modelId,
                 messages = requestMessages
-            ).trim()
+            ).collect { delta ->
+                if (delta.content.isNotEmpty()) {
+                    assistantReply.append(delta.content)
+                }
+                if (delta.reasoningContent.isNotEmpty()) {
+                    reasoningContent.append(delta.reasoningContent)
+                }
+                chatRepository.updateMessageContent(
+                    messageId = assistantMessageId,
+                    content = assistantReply.toString(),
+                    reasoningContent = reasoningContent.toString().ifBlank { null }
+                )
+            }
         } catch (exception: Exception) {
+            chatRepository.deleteMessage(assistantMessageId)
             chatRepository.touchChat(targetChatId)
             throw MessageSendFailedException(
                 chatId = targetChatId,
@@ -93,7 +121,10 @@ class SendMessageUseCase(
             )
         }
 
-        if (assistantReply.isBlank()) {
+        val finalReply = assistantReply.toString().trim()
+        val finalReasoning = reasoningContent.toString().trim()
+        if (finalReply.isBlank() && finalReasoning.isBlank()) {
+            chatRepository.deleteMessage(assistantMessageId)
             chatRepository.touchChat(targetChatId)
             throw MessageSendFailedException(
                 chatId = targetChatId,
@@ -102,11 +133,10 @@ class SendMessageUseCase(
             )
         }
 
-        chatRepository.addMessage(
-            chatId = targetChatId,
-            role = MessageRole.ASSISTANT,
-            content = assistantReply,
-            now = System.currentTimeMillis()
+        chatRepository.updateMessageContent(
+            messageId = assistantMessageId,
+            content = finalReply,
+            reasoningContent = finalReasoning.ifBlank { null }
         )
         chatRepository.touchChat(targetChatId)
 

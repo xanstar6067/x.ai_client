@@ -65,6 +65,7 @@ fun XaiChatNavHost(container: AppContainer) {
                         }
                     }
                 },
+                onRegenerate = viewModel::regenerateLastResponse,
                 onBack = { navController.popBackStack() },
                 onErrorShown = viewModel::clearError
             )
@@ -86,6 +87,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 onModelSelected = viewModel::onModelSelected,
                 onRoleSelected = viewModel::onRoleSelected,
                 onSend = { viewModel.sendMessage {} },
+                onRegenerate = viewModel::regenerateLastResponse,
                 onBack = { navController.popBackStack() },
                 onErrorShown = viewModel::clearError
             )

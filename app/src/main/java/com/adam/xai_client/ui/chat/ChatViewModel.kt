@@ -12,6 +12,7 @@ import com.adam.xai_client.data.repository.RoleRepository
 import com.adam.xai_client.data.repository.SettingsRepository
 import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.Message
+import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.ModelRole
 import com.adam.xai_client.domain.usecase.MessageSendFailedException
 import com.adam.xai_client.domain.usecase.SendMessageUseCase
@@ -154,15 +155,20 @@ class ChatViewModel(
     fun sendMessage(onChatCreated: (Long) -> Unit) {
         viewModelScope.launch {
             val beforeSendChatId = _uiState.value.chatId
-            _uiState.update { it.copy(isSending = true, error = null) }
+            val outgoingText = _uiState.value.inputText
+            _uiState.update { it.copy(isSending = true, error = null, inputText = "") }
 
             runCatching {
                 val state = _uiState.value
                 sendMessageUseCase(
                     chatId = state.chatId,
-                    input = state.inputText,
+                    input = outgoingText,
                     selectedModelId = state.selectedModelId,
-                    selectedRoleId = state.selectedRoleId
+                    selectedRoleId = state.selectedRoleId,
+                    onChatReady = { newChatId ->
+                        chatIdFlow.value = newChatId
+                        _uiState.update { it.copy(chatId = newChatId) }
+                    }
                 )
             }.onSuccess { newChatId ->
                 chatIdFlow.value = newChatId
@@ -185,13 +191,59 @@ class ChatViewModel(
                 _uiState.update {
                     it.copy(
                         chatId = failedChatId ?: it.chatId,
-                        inputText = if (failedChatId == null) it.inputText else "",
+                        inputText = if (failedChatId == null) outgoingText else "",
                         isSending = false,
                         error = throwable.toUserMessage()
                     )
                 }
-                if (beforeSendChatId == null && failedChatId != null) {
-                    onChatCreated(failedChatId)
+            }
+        }
+    }
+
+    fun regenerateLastResponse() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            if (state.isSending || state.chatId == null) return@launch
+
+            val assistantIndex = state.messages.indexOfLast { it.role == MessageRole.ASSISTANT }
+            if (assistantIndex <= 0) return@launch
+
+            val userMessage = state.messages
+                .take(assistantIndex)
+                .lastOrNull { it.role == MessageRole.USER }
+                ?: return@launch
+
+            val trailingAssistantIds = state.messages
+                .drop(assistantIndex)
+                .filter { it.role == MessageRole.ASSISTANT }
+                .map { it.id }
+
+            _uiState.update { it.copy(isSending = true, error = null) }
+            runCatching {
+                chatRepository.deleteMessages(trailingAssistantIds)
+                sendMessageUseCase(
+                    chatId = state.chatId,
+                    input = userMessage.content,
+                    selectedModelId = state.selectedModelId,
+                    selectedRoleId = state.selectedRoleId,
+                    addUserMessage = false
+                )
+            }.onSuccess { newChatId ->
+                chatIdFlow.value = newChatId
+                _uiState.update {
+                    it.copy(chatId = newChatId, isSending = false, error = null)
+                }
+            }.onFailure { throwable ->
+                val failedChatId = (throwable as? MessageSendFailedException)?.chatId
+                if (failedChatId != null) {
+                    chatIdFlow.value = failedChatId
+                }
+                _uiState.update {
+                    it.copy(
+                        chatId = failedChatId ?: it.chatId,
+                        isSending = false,
+                        error = throwable.toUserMessage()
+                    )
                 }
             }
         }

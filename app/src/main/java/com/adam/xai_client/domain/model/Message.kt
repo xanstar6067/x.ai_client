@@ -5,6 +5,7 @@ data class Message(
     val chatId: Long,
     val role: MessageRole,
     val content: String,
+    val reasoningContent: String? = null,
     val createdAt: Long
 )
 
