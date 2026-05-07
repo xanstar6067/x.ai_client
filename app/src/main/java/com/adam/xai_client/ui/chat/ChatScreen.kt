@@ -145,12 +145,6 @@ fun ChatScreen(
                 onModelSelected = onModelSelected,
                 onRoleSelected = onRoleSelected
             )
-            if (state.selectedModelId.isGrok420MultiAgent()) {
-                MultiAgentQuickSettings(
-                    selectedEffort = state.modelSettings.reasoningEffort,
-                    onReasoningEffortChange = onReasoningEffortChange
-                )
-            }
             if (state.isSending) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
@@ -245,53 +239,6 @@ fun ChatScreen(
 }
 
 @Composable
-private fun MultiAgentQuickSettings(
-    selectedEffort: ReasoningEffort?,
-    onReasoningEffortChange: (ReasoningEffort?) -> Unit
-) {
-    val selectedAgentCount = selectedEffort.agentCount()
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Text(
-            text = "Multi-agent agents: $selectedAgentCount",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = { onReasoningEffortChange(ReasoningEffort.LOW) }) {
-                Text("4 агента")
-            }
-            TextButton(onClick = { onReasoningEffortChange(ReasoningEffort.HIGH) }) {
-                Text("16 агентов")
-            }
-        }
-    }
-}
-
-private fun ReasoningEffort?.agentCountLabel(): String {
-    return when (this) {
-        ReasoningEffort.HIGH, ReasoningEffort.XHIGH -> "16 агентов"
-        else -> "4 агента"
-    }
-}
-
-private fun ReasoningEffort?.agentCount(): Int {
-    return when (this) {
-        ReasoningEffort.HIGH, ReasoningEffort.XHIGH -> 16
-        else -> 4
-    }
-}
-
-private fun String?.isGrok420MultiAgent(): Boolean {
-    return orEmpty().lowercase().startsWith("grok-4.20-multi-agent")
-}
-
-@Composable
 private fun TokenSummaryBar(
     chatTokenCount: Int,
     inputTokenCount: Int
@@ -327,11 +274,11 @@ private fun ChatSelectors(
     val selectedModel = models.firstOrNull { it.id == selectedModelId }
     val selectedRole = roles.firstOrNull { it.id == selectedRoleId }
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         DropdownSelector(
             label = if (models.isEmpty()) "Нет включенных моделей" else "Модель",
@@ -339,7 +286,7 @@ private fun ChatSelectors(
             selectedOption = selectedModel,
             optionLabel = { it.name },
             onOptionSelected = { onModelSelected(it.id) },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.weight(1f)
         )
         DropdownSelector(
             label = if (roles.isEmpty()) "Нет ролей" else "Роль",
@@ -347,7 +294,7 @@ private fun ChatSelectors(
             selectedOption = selectedRole,
             optionLabel = { it.name },
             onOptionSelected = { onRoleSelected(it.id) },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.weight(1f)
         )
     }
 }
