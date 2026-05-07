@@ -461,14 +461,24 @@ class ChatViewModel(
 
     private fun ChatModelSettings.normalizedForModel(modelId: String?): ChatModelSettings {
         val limit = XaiModelLimits.forModel(modelId)?.contextWindowTokens
+        val isMultiAgent = modelId.isGrok420MultiAgent()
         return copy(
-            maxTokens = maxTokens?.coerceIn(1, limit ?: 131_072),
+            maxTokens = maxTokens
+                ?.takeUnless { isMultiAgent }
+                ?.coerceIn(1, limit ?: 131_072),
+            frequencyPenalty = frequencyPenalty.takeUnless { isMultiAgent },
+            presencePenalty = presencePenalty.takeUnless { isMultiAgent },
             reasoningEffort = reasoningEffort.takeIf { modelId.supportsReasoningEffort() }
         )
     }
 
     private fun String?.supportsReasoningEffort(): Boolean {
-        return orEmpty().lowercase().startsWith("grok-3-mini")
+        val normalized = orEmpty().lowercase()
+        return normalized.startsWith("grok-3-mini") || normalized == "grok-4.20-multi-agent"
+    }
+
+    private fun String?.isGrok420MultiAgent(): Boolean {
+        return orEmpty().lowercase() == "grok-4.20-multi-agent"
     }
 
     companion object {

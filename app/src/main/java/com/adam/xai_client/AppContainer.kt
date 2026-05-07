@@ -7,6 +7,7 @@ import com.adam.xai_client.data.local.settings.SettingsDataStore
 import com.adam.xai_client.data.remote.api.XaiApiClient
 import com.adam.xai_client.data.remote.client.KtorXaiApiClient
 import com.adam.xai_client.data.repository.ChatRepository
+import com.adam.xai_client.data.repository.ImageRepository
 import com.adam.xai_client.data.repository.ModelRepository
 import com.adam.xai_client.data.repository.RoleRepository
 import com.adam.xai_client.data.repository.SettingsRepository
@@ -43,6 +44,12 @@ class AppContainer(context: Context) {
 
     val modelRepository: ModelRepository = ModelRepository(
         aiModelDao = database.aiModelDao(),
+        settingsRepository = settingsRepository,
+        apiClient = apiClient
+    )
+
+    val imageRepository: ImageRepository = ImageRepository(
+        context = appContext,
         settingsRepository = settingsRepository,
         apiClient = apiClient
     )

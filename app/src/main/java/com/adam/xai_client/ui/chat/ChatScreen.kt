@@ -143,6 +143,12 @@ fun ChatScreen(
                 onModelSelected = onModelSelected,
                 onRoleSelected = onRoleSelected
             )
+            if (state.selectedModelId.orEmpty().lowercase() == "grok-4.20-multi-agent") {
+                MultiAgentQuickSettings(
+                    selectedEffort = state.modelSettings.reasoningEffort,
+                    onReasoningEffortChange = onReasoningEffortChange
+                )
+            }
             if (state.isSending) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
@@ -233,6 +239,40 @@ fun ChatScreen(
             onReasoningEffortChange = onReasoningEffortChange,
             onReset = onResetModelSettings
         )
+    }
+}
+
+@Composable
+private fun MultiAgentQuickSettings(
+    selectedEffort: ReasoningEffort?,
+    onReasoningEffortChange: (ReasoningEffort?) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = "Multi-agent: ${selectedEffort.agentCountLabel()}",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { onReasoningEffortChange(ReasoningEffort.LOW) }) {
+                Text("4 агента")
+            }
+            TextButton(onClick = { onReasoningEffortChange(ReasoningEffort.HIGH) }) {
+                Text("16 агентов")
+            }
+        }
+    }
+}
+
+private fun ReasoningEffort?.agentCountLabel(): String {
+    return when (this) {
+        ReasoningEffort.HIGH, ReasoningEffort.XHIGH -> "16 агентов"
+        else -> "4 агента"
     }
 }
 
@@ -397,7 +437,14 @@ private fun ModelSettingsDialog(
     onReset: () -> Unit
 ) {
     val maxContext = limits?.contextWindowTokens ?: 131_072
-    val supportsReasoningEffort = modelId.orEmpty().lowercase().startsWith("grok-3-mini")
+    val normalizedModelId = modelId.orEmpty().lowercase()
+    val isGrok420MultiAgent = normalizedModelId == "grok-4.20-multi-agent"
+    val supportsReasoningEffort = normalizedModelId.startsWith("grok-3-mini") || isGrok420MultiAgent
+    val reasoningEffortOptions = if (isGrok420MultiAgent) {
+        ReasoningEffort.entries
+    } else {
+        listOf(ReasoningEffort.LOW, ReasoningEffort.HIGH)
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -413,13 +460,46 @@ private fun ModelSettingsDialog(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                NumericTextSetting(
-                    label = "Max output tokens",
-                    value = settings.maxTokens,
-                    placeholder = "По умолчанию API",
-                    onValueChange = onMaxTokensChange,
-                    maxValue = maxContext
-                )
+                if (supportsReasoningEffort) {
+                    DropdownSelector(
+                        label = if (isGrok420MultiAgent) "Agent setup" else "Reasoning effort",
+                        options = reasoningEffortOptions,
+                        selectedOption = settings.reasoningEffort,
+                        optionLabel = { effort ->
+                            when {
+                                !isGrok420MultiAgent -> effort.label
+                                effort == ReasoningEffort.LOW || effort == ReasoningEffort.MEDIUM -> "${effort.label} - 4 agents"
+                                else -> "${effort.label} - 16 agents"
+                            }
+                        },
+                        onOptionSelected = onReasoningEffortChange,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    TextButton(onClick = { onReasoningEffortChange(null) }) {
+                        Text(
+                            if (isGrok420MultiAgent) {
+                                "Сбросить выбор агентов"
+                            } else {
+                                "Сбросить reasoning effort"
+                            }
+                        )
+                    }
+                }
+                if (isGrok420MultiAgent) {
+                    Text(
+                        text = "Max output tokens не поддерживается для multi-agent.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    NumericTextSetting(
+                        label = "Max output tokens",
+                        value = settings.maxTokens,
+                        placeholder = "По умолчанию API",
+                        onValueChange = onMaxTokensChange,
+                        maxValue = maxContext
+                    )
+                }
                 SliderSetting(
                     label = "Temperature",
                     value = settings.temperature,
@@ -436,28 +516,36 @@ private fun ModelSettingsDialog(
                     steps = 19,
                     onValueChange = onTopPChange
                 )
-                SliderSetting(
-                    label = "Frequency penalty",
-                    value = settings.frequencyPenalty,
-                    defaultValue = 0.0,
-                    valueRange = -2f..2f,
-                    steps = 39,
-                    onValueChange = onFrequencyPenaltyChange
-                )
-                SliderSetting(
-                    label = "Presence penalty",
-                    value = settings.presencePenalty,
-                    defaultValue = 0.0,
-                    valueRange = -2f..2f,
-                    steps = 39,
-                    onValueChange = onPresencePenaltyChange
-                )
+                if (!isGrok420MultiAgent) {
+                    SliderSetting(
+                        label = "Frequency penalty",
+                        value = settings.frequencyPenalty,
+                        defaultValue = 0.0,
+                        valueRange = -2f..2f,
+                        steps = 39,
+                        onValueChange = onFrequencyPenaltyChange
+                    )
+                    SliderSetting(
+                        label = "Presence penalty",
+                        value = settings.presencePenalty,
+                        defaultValue = 0.0,
+                        valueRange = -2f..2f,
+                        steps = 39,
+                        onValueChange = onPresencePenaltyChange
+                    )
+                }
                 if (supportsReasoningEffort) {
                     DropdownSelector(
-                        label = "Reasoning effort",
-                        options = listOf(ReasoningEffort.LOW, ReasoningEffort.HIGH),
+                        label = if (isGrok420MultiAgent) "Agent setup" else "Reasoning effort",
+                        options = reasoningEffortOptions,
                         selectedOption = settings.reasoningEffort,
-                        optionLabel = { it.label },
+                        optionLabel = { effort ->
+                            when {
+                                !isGrok420MultiAgent -> effort.label
+                                effort == ReasoningEffort.LOW || effort == ReasoningEffort.MEDIUM -> "${effort.label} - 4 agents"
+                                else -> "${effort.label} - 16 agents"
+                            }
+                        },
                         onOptionSelected = onReasoningEffortChange,
                         modifier = Modifier.fillMaxWidth()
                     )

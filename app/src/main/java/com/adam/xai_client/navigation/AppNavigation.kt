@@ -13,6 +13,8 @@ import com.adam.xai_client.ui.chat.ChatScreen
 import com.adam.xai_client.ui.chat.ChatViewModel
 import com.adam.xai_client.ui.chatlist.ChatListScreen
 import com.adam.xai_client.ui.chatlist.ChatListViewModel
+import com.adam.xai_client.ui.images.ImageGenerationScreen
+import com.adam.xai_client.ui.images.ImageGenerationViewModel
 import com.adam.xai_client.ui.models.ModelsScreen
 import com.adam.xai_client.ui.models.ModelsViewModel
 import com.adam.xai_client.ui.roles.RolesScreen
@@ -41,6 +43,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 onOpenSettings = { navController.navigate(Screen.Settings.route) },
                 onOpenModels = { navController.navigate(Screen.Models.route) },
                 onOpenRoles = { navController.navigate(Screen.Roles.route) },
+                onOpenImages = { navController.navigate(Screen.Images.route) },
                 onErrorShown = viewModel::clearError
             )
         }
@@ -160,6 +163,25 @@ fun XaiChatNavHost(container: AppContainer) {
                 onMessageShown = viewModel::clearTransientMessages
             )
         }
+
+        composable(Screen.Images.route) {
+            val viewModel: ImageGenerationViewModel = viewModel(
+                factory = ImageGenerationViewModel.factory(container)
+            )
+            val state = viewModel.uiState.collectAsStateWithLifecycle().value
+            ImageGenerationScreen(
+                state = state,
+                onPromptChange = viewModel::onPromptChange,
+                onSourceImageUrlChange = viewModel::onSourceImageUrlChange,
+                onAspectRatioChange = viewModel::onAspectRatioChange,
+                onResolutionChange = viewModel::onResolutionChange,
+                onGenerate = viewModel::generate,
+                onSave = viewModel::save,
+                onStoragePermissionDenied = viewModel::onStoragePermissionDenied,
+                onBack = { navController.popBackStack() },
+                onMessageShown = viewModel::clearTransientMessages
+            )
+        }
     }
 }
 
@@ -169,6 +191,7 @@ private sealed class Screen(val route: String) {
     data object Settings : Screen("settings")
     data object Models : Screen("models")
     data object Roles : Screen("roles")
+    data object Images : Screen("images")
 
     data object Chat : Screen("chat/{chatId}") {
         const val ARG_CHAT_ID = "chatId"

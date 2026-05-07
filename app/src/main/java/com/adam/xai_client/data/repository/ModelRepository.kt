@@ -18,6 +18,10 @@ class ModelRepository(
     val enabledModels: Flow<List<AiModel>> = aiModelDao.observeEnabledModels()
         .map { entities -> entities.map { it.asDomain() } }
 
+    suspend fun ensureKnownModels() {
+        upsertModelsPreservingEnabled(knownXaiModels())
+    }
+
     suspend fun refreshModels() {
         val settings = settingsRepository.currentApiSettings()
         if (settings.apiKey.isBlank()) {
@@ -28,14 +32,19 @@ class ModelRepository(
             apiKey = settings.apiKey,
             baseUrl = settings.baseUrl
         )
+        val models = (remoteModels + knownXaiModels()).distinctBy { it.id }
+        upsertModelsPreservingEnabled(models)
+    }
+
+    private suspend fun upsertModelsPreservingEnabled(models: List<AiModel>) {
         val enabledById = aiModelDao.getModels().associate { it.id to it.isEnabledForChat }
         val now = System.currentTimeMillis()
         aiModelDao.upsertModels(
-            remoteModels.map { model ->
+            models.map { model ->
                 AiModelEntity(
                     id = model.id,
                     name = model.name.ifBlank { model.id },
-                    isEnabledForChat = enabledById[model.id] ?: false,
+                    isEnabledForChat = enabledById[model.id] ?: model.isEnabledForChat,
                     updatedAt = now
                 )
             }
@@ -49,4 +58,10 @@ class ModelRepository(
     suspend fun getModel(modelId: String): AiModel? {
         return aiModelDao.getModel(modelId)?.asDomain()
     }
+
+    private fun knownXaiModels(): List<AiModel> = listOf(
+        AiModel(id = "grok-4.20-multi-agent", name = "grok-4.20-multi-agent"),
+        AiModel(id = "grok-4.20-reasoning", name = "grok-4.20-reasoning"),
+        AiModel(id = "grok-4.20-non-reasoning", name = "grok-4.20-non-reasoning")
+    )
 }

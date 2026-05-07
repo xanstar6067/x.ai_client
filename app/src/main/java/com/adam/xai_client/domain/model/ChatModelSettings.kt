@@ -20,5 +20,7 @@ data class ChatModelSettings(
 
 enum class ReasoningEffort(val apiName: String, val label: String) {
     LOW("low", "Low"),
-    HIGH("high", "High")
+    MEDIUM("medium", "Medium"),
+    HIGH("high", "High"),
+    XHIGH("xhigh", "XHigh")
 }

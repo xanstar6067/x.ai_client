@@ -2,6 +2,8 @@ package com.adam.xai_client.data.remote.api
 
 import com.adam.xai_client.data.remote.dto.ApiChatMessage
 import com.adam.xai_client.domain.model.ChatModelSettings
+import com.adam.xai_client.domain.model.GeneratedImage
+import com.adam.xai_client.domain.model.ImageGenerationOptions
 import com.adam.xai_client.domain.model.AiModel
 import kotlinx.coroutines.flow.Flow
 
@@ -31,4 +33,10 @@ interface XaiApiClient {
         messages: List<ApiChatMessage>,
         modelSettings: ChatModelSettings = ChatModelSettings()
     ): Flow<ChatStreamDelta>
+
+    suspend fun generateImage(
+        apiKey: String,
+        baseUrl: String,
+        options: ImageGenerationOptions
+    ): GeneratedImage
 }

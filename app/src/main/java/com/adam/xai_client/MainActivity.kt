@@ -15,6 +15,7 @@ class MainActivity : ComponentActivity() {
         val appContainer = (application as XaiChatApplication).container
         lifecycleScope.launch {
             appContainer.roleRepository.ensureBuiltInRole()
+            appContainer.modelRepository.ensureKnownModels()
         }
         enableEdgeToEdge()
         setContent {
