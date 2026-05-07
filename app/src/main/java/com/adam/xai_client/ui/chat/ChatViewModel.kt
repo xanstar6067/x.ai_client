@@ -249,6 +249,52 @@ class ChatViewModel(
         }
     }
 
+    fun resendFromUserMessage(messageId: Long) {
+        viewModelScope.launch {
+            val state = _uiState.value
+            if (state.isSending || state.chatId == null) return@launch
+
+            val userIndex = state.messages.indexOfFirst {
+                it.id == messageId && it.role == MessageRole.USER
+            }
+            if (userIndex < 0) return@launch
+
+            val userMessage = state.messages[userIndex]
+            val trailingMessageIds = state.messages
+                .drop(userIndex + 1)
+                .map { it.id }
+
+            _uiState.update { it.copy(isSending = true, error = null) }
+            runCatching {
+                chatRepository.deleteMessages(trailingMessageIds)
+                sendMessageUseCase(
+                    chatId = state.chatId,
+                    input = userMessage.content,
+                    selectedModelId = state.selectedModelId,
+                    selectedRoleId = state.selectedRoleId,
+                    addUserMessage = false
+                )
+            }.onSuccess { newChatId ->
+                chatIdFlow.value = newChatId
+                _uiState.update {
+                    it.copy(chatId = newChatId, isSending = false, error = null)
+                }
+            }.onFailure { throwable ->
+                val failedChatId = (throwable as? MessageSendFailedException)?.chatId
+                if (failedChatId != null) {
+                    chatIdFlow.value = failedChatId
+                }
+                _uiState.update {
+                    it.copy(
+                        chatId = failedChatId ?: it.chatId,
+                        isSending = false,
+                        error = throwable.toUserMessage()
+                    )
+                }
+            }
+        }
+    }
+
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }

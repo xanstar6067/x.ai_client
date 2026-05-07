@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.HorizontalDivider
@@ -18,8 +21,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.MessageRole
@@ -29,8 +38,10 @@ fun MessageBubble(
     message: Message,
     isPending: Boolean,
     canRegenerate: Boolean,
+    canResend: Boolean,
     onCopy: (String) -> Unit,
     onRegenerate: () -> Unit,
+    onResend: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isUser = message.role == MessageRole.USER
@@ -48,16 +59,16 @@ fun MessageBubble(
     val visibleContent = message.content.ifBlank {
         if (reasoning.isNotBlank()) "" else if (isPending) "Ожидаю ответ..." else ""
     }
-    val copyText = buildString {
-        if (reasoning.isNotBlank()) {
-            append("Размышления\n")
-            append(reasoning)
-            if (message.content.isNotBlank()) {
-                append("\n\nОтвет\n")
-            }
+    val copyText = message.content.trim()
+    var isReasoningExpanded by rememberSaveable(message.id) {
+        mutableStateOf(message.content.isBlank())
+    }
+
+    LaunchedEffect(message.id, message.content.isNotBlank(), isPending) {
+        if (!isPending && message.content.isNotBlank()) {
+            isReasoningExpanded = false
         }
-        append(message.content)
-    }.trim()
+    }
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -78,15 +89,12 @@ fun MessageBubble(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (!isUser && reasoning.isNotBlank()) {
-                        Text(
-                            text = "Размышления",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = textColor.copy(alpha = 0.78f)
-                        )
-                        Text(
-                            text = reasoning,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = textColor.copy(alpha = 0.78f)
+                        ReasoningBlock(
+                            reasoning = reasoning,
+                            isExpanded = isReasoningExpanded,
+                            textColor = textColor,
+                            onToggle = { isReasoningExpanded = !isReasoningExpanded },
+                            onCopy = { onCopy(reasoning) }
                         )
                         if (visibleContent.isNotBlank()) {
                             HorizontalDivider(color = textColor.copy(alpha = 0.18f))
@@ -98,7 +106,7 @@ fun MessageBubble(
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
-                    if (copyText.isNotBlank() || canRegenerate) {
+                    if (copyText.isNotBlank() || canRegenerate || canResend) {
                         Row(
                             horizontalArrangement = Arrangement.End,
                             modifier = Modifier.fillMaxWidth()
@@ -119,10 +127,68 @@ fun MessageBubble(
                                     )
                                 }
                             }
+                            if (canResend) {
+                                IconButton(onClick = onResend) {
+                                    Icon(
+                                        Icons.Filled.ArrowDownward,
+                                        contentDescription = "Отправить снова"
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ReasoningBlock(
+    reasoning: String,
+    isExpanded: Boolean,
+    textColor: Color,
+    onToggle: () -> Unit,
+    onCopy: () -> Unit
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Размышления",
+                style = MaterialTheme.typography.labelMedium,
+                color = textColor.copy(alpha = 0.78f),
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = onCopy) {
+                Icon(
+                    Icons.Filled.ContentCopy,
+                    contentDescription = "Копировать размышления",
+                    tint = textColor.copy(alpha = 0.78f)
+                )
+            }
+            IconButton(onClick = onToggle) {
+                Icon(
+                    if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = if (isExpanded) {
+                        "Свернуть размышления"
+                    } else {
+                        "Показать размышления"
+                    },
+                    tint = textColor.copy(alpha = 0.78f)
+                )
+            }
+        }
+        if (isExpanded) {
+            Text(
+                text = reasoning,
+                style = MaterialTheme.typography.bodySmall,
+                color = textColor.copy(alpha = 0.78f)
+            )
         }
     }
 }

@@ -50,6 +50,7 @@ fun ChatScreen(
     onRoleSelected: (Long) -> Unit,
     onSend: () -> Unit,
     onRegenerate: () -> Unit,
+    onResendMessage: (Long) -> Unit,
     onBack: () -> Unit,
     onErrorShown: () -> Unit
 ) {
@@ -142,10 +143,13 @@ fun ChatScreen(
                             canRegenerate = !state.isSending &&
                                 isLastMessage &&
                                 message.role == MessageRole.ASSISTANT,
+                            canResend = !state.isSending &&
+                                message.role == MessageRole.USER,
                             onCopy = { text ->
                                 clipboardManager.setText(AnnotatedString(text))
                             },
-                            onRegenerate = onRegenerate
+                            onRegenerate = onRegenerate,
+                            onResend = { onResendMessage(message.id) }
                         )
                     }
                 }
