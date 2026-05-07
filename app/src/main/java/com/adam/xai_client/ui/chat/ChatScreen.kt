@@ -80,6 +80,7 @@ fun ChatScreen(
     onFrequencyPenaltyChange: (Double?) -> Unit,
     onPresencePenaltyChange: (Double?) -> Unit,
     onReasoningEffortChange: (ReasoningEffort?) -> Unit,
+    onContextMessageLimitChange: (Int) -> Unit,
     onResetModelSettings: () -> Unit,
     onBack: () -> Unit,
     onErrorShown: () -> Unit
@@ -235,6 +236,7 @@ fun ChatScreen(
             onFrequencyPenaltyChange = onFrequencyPenaltyChange,
             onPresencePenaltyChange = onPresencePenaltyChange,
             onReasoningEffortChange = onReasoningEffortChange,
+            onContextMessageLimitChange = onContextMessageLimitChange,
             onReset = onResetModelSettings
         )
     }
@@ -399,6 +401,7 @@ private fun ModelSettingsDialog(
     onFrequencyPenaltyChange: (Double?) -> Unit,
     onPresencePenaltyChange: (Double?) -> Unit,
     onReasoningEffortChange: (ReasoningEffort?) -> Unit,
+    onContextMessageLimitChange: (Int) -> Unit,
     onReset: () -> Unit
 ) {
     val maxContext = limits?.contextWindowTokens ?: 131_072
@@ -422,6 +425,10 @@ private fun ModelSettingsDialog(
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
+                )
+                ContextMessageLimitSetting(
+                    value = settings.contextMessageLimit,
+                    onValueChange = onContextMessageLimitChange
                 )
                 if (isGrok420MultiAgent) {
                     DropdownSelector(
@@ -536,6 +543,27 @@ private fun ModelSettingsDialog(
             }
         }
     )
+}
+
+@Composable
+private fun ContextMessageLimitSetting(
+    value: Int,
+    onValueChange: (Int) -> Unit
+) {
+    Column {
+        Text("Сообщений в контексте", style = MaterialTheme.typography.labelLarge)
+        Text(
+            text = if (value == 0) "Без ограничения" else "Последние $value сообщений",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { raw -> onValueChange(raw.roundToInt().coerceIn(0, 99)) },
+            valueRange = 0f..99f,
+            steps = 98
+        )
+    }
 }
 
 @Composable

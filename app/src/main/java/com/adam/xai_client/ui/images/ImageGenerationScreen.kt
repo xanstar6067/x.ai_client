@@ -519,6 +519,8 @@ private fun ImageMessageCard(
     onDelete: () -> Unit,
     onSave: () -> Unit
 ) {
+    var isDeleteConfirmationOpen by remember(message.id) { mutableStateOf(false) }
+
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -573,13 +575,36 @@ private fun ImageMessageCard(
                     }
                 }
                 IconButton(
-                    onClick = onDelete,
+                    onClick = { isDeleteConfirmationOpen = true },
                     enabled = !isGenerating
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = "Удалить")
                 }
             }
         }
+    }
+
+    if (isDeleteConfirmationOpen) {
+        AlertDialog(
+            onDismissRequest = { isDeleteConfirmationOpen = false },
+            title = { Text("Удалить сообщение?") },
+            text = { Text("Сообщение будет удалено без восстановления.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isDeleteConfirmationOpen = false
+                        onDelete()
+                    }
+                ) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isDeleteConfirmationOpen = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 }
 

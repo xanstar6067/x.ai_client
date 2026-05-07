@@ -30,7 +30,7 @@ import com.adam.xai_client.data.local.entity.ModelRoleEntity
         ImageChatEntity::class,
         ImageMessageEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -106,6 +106,12 @@ abstract class AppDatabase : RoomDatabase() {
                     """.trimIndent()
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_image_messages_chatId ON image_messages(chatId)")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat_model_settings ADD COLUMN contextMessageLimit INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

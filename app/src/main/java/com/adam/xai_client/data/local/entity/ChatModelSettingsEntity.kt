@@ -25,5 +25,6 @@ data class ChatModelSettingsEntity(
     val frequencyPenalty: Double? = null,
     val presencePenalty: Double? = null,
     val reasoningEffort: ReasoningEffort? = null,
+    val contextMessageLimit: Int = 0,
     val updatedAt: Long
 )

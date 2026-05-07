@@ -72,12 +72,16 @@ class SendMessageUseCase(
         settingsRepository.setLastSelectedRoleId(effectiveRoleId)
 
         val history = chatRepository.getMessages(targetChatId)
+        val contextHistory = effectiveModelSettings.contextMessageLimit
+            .takeIf { it > 0 }
+            ?.let { limit -> history.takeLast(limit) }
+            ?: history
         val requestMessages = buildList {
             val systemPrompt = effectiveRole?.prompt.orEmpty().trim()
             if (systemPrompt.isNotBlank()) {
                 add(ApiChatMessage(role = MessageRole.SYSTEM.apiName, content = systemPrompt))
             }
-            history
+            contextHistory
                 .filter { it.role != MessageRole.SYSTEM }
                 .forEach { message ->
                     add(

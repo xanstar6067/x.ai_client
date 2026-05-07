@@ -72,6 +72,7 @@ fun MessageBubble(
         mutableStateOf(message.content.isBlank())
     }
     var isEditing by rememberSaveable(message.id) { mutableStateOf(false) }
+    var isDeleteConfirmationOpen by rememberSaveable(message.id) { mutableStateOf(false) }
     var editedText by rememberSaveable(message.id) { mutableStateOf(message.content) }
 
     LaunchedEffect(message.id, message.content.isNotBlank(), isPending) {
@@ -143,7 +144,7 @@ fun MessageBubble(
                                     )
                                 }
                             }
-                            IconButton(onClick = onDelete) {
+                            IconButton(onClick = { isDeleteConfirmationOpen = true }) {
                                 Icon(
                                     Icons.Filled.Delete,
                                     contentDescription = "Удалить"
@@ -205,6 +206,29 @@ fun MessageBubble(
             },
             dismissButton = {
                 TextButton(onClick = { isEditing = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
+    }
+
+    if (isDeleteConfirmationOpen) {
+        AlertDialog(
+            onDismissRequest = { isDeleteConfirmationOpen = false },
+            title = { Text("Удалить сообщение?") },
+            text = { Text("Сообщение будет удалено без восстановления.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isDeleteConfirmationOpen = false
+                        onDelete()
+                    }
+                ) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isDeleteConfirmationOpen = false }) {
                     Text("Отмена")
                 }
             }

@@ -427,6 +427,12 @@ class ChatViewModel(
         }
     }
 
+    fun updateContextMessageLimit(contextMessageLimit: Int) {
+        updateModelSettings { current ->
+            current.copy(contextMessageLimit = contextMessageLimit.coerceIn(0, 99))
+        }
+    }
+
     fun resetModelSettings() {
         updateModelSettings { ChatModelSettings(chatId = it.chatId) }
     }
@@ -480,7 +486,8 @@ class ChatViewModel(
                 ?.coerceIn(1, limit ?: 131_072),
             frequencyPenalty = frequencyPenalty.takeUnless { isMultiAgent },
             presencePenalty = presencePenalty.takeUnless { isMultiAgent },
-            reasoningEffort = reasoningEffort.takeIf { modelId.supportsReasoningEffort() }
+            reasoningEffort = reasoningEffort.takeIf { modelId.supportsReasoningEffort() },
+            contextMessageLimit = contextMessageLimit.coerceIn(0, 99)
         )
     }
 

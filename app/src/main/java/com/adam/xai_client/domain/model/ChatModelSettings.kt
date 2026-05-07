@@ -7,7 +7,8 @@ data class ChatModelSettings(
     val topP: Double? = null,
     val frequencyPenalty: Double? = null,
     val presencePenalty: Double? = null,
-    val reasoningEffort: ReasoningEffort? = null
+    val reasoningEffort: ReasoningEffort? = null,
+    val contextMessageLimit: Int = 0
 ) {
     val hasCustomValues: Boolean
         get() = maxTokens != null ||
@@ -15,7 +16,8 @@ data class ChatModelSettings(
             topP != null ||
             frequencyPenalty != null ||
             presencePenalty != null ||
-            reasoningEffort != null
+            reasoningEffort != null ||
+            contextMessageLimit != 0
 }
 
 enum class ReasoningEffort(val apiName: String, val label: String) {
