@@ -30,10 +30,14 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -48,6 +52,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -64,6 +69,8 @@ import com.adam.xai_client.domain.model.ImageChatMessage
 import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.ui.components.DropdownSelector
 import com.adam.xai_client.ui.components.TransientSnackbar
+import java.text.DateFormat
+import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,7 +83,9 @@ fun ImageGenerationScreen(
     onModelSelected: (String) -> Unit,
     onChatSelected: (Long?) -> Unit,
     onNewChat: () -> Unit,
-    onDeleteChat: () -> Unit,
+    onDeleteChat: (Long) -> Unit,
+    onImageSettingsOpenChange: (Boolean) -> Unit,
+    onShowChatList: () -> Unit,
     onEditFromMessage: (Long) -> Unit,
     onClearEditSource: () -> Unit,
     onGenerate: () -> Unit,
@@ -88,6 +97,8 @@ fun ImageGenerationScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     var pendingSaveMessageId by remember { mutableLongStateOf(0L) }
+    var chatPendingDeletion by remember { mutableStateOf<ImageChat?>(null) }
+    val isChatOpen = state.selectedChatId != null || state.isNewChatMode
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -110,149 +121,322 @@ fun ImageGenerationScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("ImageGen чаты") },
+                title = {
+                    Text(
+                        text = if (isChatOpen) "ImageGen чат" else "ImageGen чаты",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = if (isChatOpen) onShowChatList else onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 },
                 actions = {
-                    IconButton(onClick = onNewChat) {
-                        Icon(Icons.Default.Add, contentDescription = "Новый image-чат")
-                    }
                     IconButton(
-                        onClick = onDeleteChat,
-                        enabled = state.selectedChatId != null
+                        onClick = { onImageSettingsOpenChange(true) },
+                        enabled = isChatOpen && state.selectedModelId != null
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Удалить image-чат")
+                        Icon(Icons.Default.Settings, contentDescription = "Настройки генерации")
+                    }
+                }
+            )
+        },
+        floatingActionButton = {
+            if (!isChatOpen) {
+                FloatingActionButton(onClick = onNewChat) {
+                    Icon(Icons.Default.Add, contentDescription = "Новый image-чат")
+                }
+            }
+        }
+    ) { padding ->
+        if (!isChatOpen) {
+            ImageChatList(
+                state = state,
+                padding = padding,
+                onOpenChat = { onChatSelected(it) },
+                onDeleteChat = { chatPendingDeletion = it }
+            )
+        } else {
+            ImageChatContent(
+                state = state,
+                padding = padding,
+                onPromptChange = onPromptChange,
+                onSourceImageUrlChange = onSourceImageUrlChange,
+                onModelSelected = onModelSelected,
+                onImageSettingsOpenChange = onImageSettingsOpenChange,
+                onEditFromMessage = onEditFromMessage,
+                onClearEditSource = onClearEditSource,
+                onGenerate = onGenerate,
+                onSaveRequested = { messageId ->
+                    if (requiresWritePermission(context)) {
+                        pendingSaveMessageId = messageId
+                        permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    } else {
+                        onSave(messageId)
                     }
                 }
             )
         }
-    ) { padding ->
+    }
+
+    if (state.isImageSettingsOpen) {
+        ImageSettingsDialog(
+            aspectRatio = state.aspectRatio,
+            resolution = state.resolution,
+            onAspectRatioChange = onAspectRatioChange,
+            onResolutionChange = onResolutionChange,
+            onDismiss = { onImageSettingsOpenChange(false) }
+        )
+    }
+
+    chatPendingDeletion?.let { chat ->
+        AlertDialog(
+            onDismissRequest = { chatPendingDeletion = null },
+            title = { Text("Удалить чат?") },
+            text = {
+                Text("Чат \"${chat.title}\" и все сгенерированные изображения будут удалены без восстановления.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeleteChat(chat.id)
+                        chatPendingDeletion = null
+                    }
+                ) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { chatPendingDeletion = null }) {
+                    Text("Отмена")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun ImageChatList(
+    state: ImageGenerationUiState,
+    padding: PaddingValues,
+    onOpenChat: (Long) -> Unit,
+    onDeleteChat: (ImageChat) -> Unit
+) {
+    if (state.chats.isEmpty()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .imePadding()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            if (state.isGenerating) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            ImageChatControls(
-                state = state,
-                onModelSelected = onModelSelected,
-                onChatSelected = onChatSelected,
-                onAspectRatioChange = onAspectRatioChange,
-                onResolutionChange = onResolutionChange
+            Icon(
+                imageVector = Icons.Default.Tune,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
             )
-
-            if (state.imageModels.isEmpty()) {
-                EmptyHint(
-                    text = "Включите модель с image или imagine в названии на странице моделей.",
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                )
-            } else if (state.messages.isEmpty()) {
-                EmptyHint(
-                    text = "Опишите изображение ниже. После генерации чат сохранится здесь.",
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentPadding = PaddingValues(bottom = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(
-                        items = state.messages,
-                        key = { it.id }
-                    ) { message ->
-                        ImageMessageCard(
-                            message = message,
-                            isSaving = state.isSavingMessageId == message.id,
-                            onEdit = { onEditFromMessage(message.id) },
-                            onSave = {
-                                if (requiresWritePermission(context)) {
-                                    pendingSaveMessageId = message.id
-                                    permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                                } else {
-                                    onSave(message.id)
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-
-            ImagePromptBar(
-                state = state,
-                onPromptChange = onPromptChange,
-                onSourceImageUrlChange = onSourceImageUrlChange,
-                onClearEditSource = onClearEditSource,
-                onGenerate = onGenerate
+            Text(
+                text = "ImageGen чатов пока нет",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 12.dp)
             )
         }
+    } else {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(
+                items = state.chats,
+                key = { it.id }
+            ) { chat ->
+                ImageChatCard(
+                    chat = chat,
+                    onClick = { onOpenChat(chat.id) },
+                    onDelete = { onDeleteChat(chat) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ImageChatCard(
+    chat: ImageChat,
+    onClick: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val dateFormat = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT) }
+
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = chat.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = dateFormat.format(Date(chat.updatedAt)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+            Spacer(modifier = Modifier.padding(start = 8.dp))
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, contentDescription = "Удалить чат")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ImageChatContent(
+    state: ImageGenerationUiState,
+    padding: PaddingValues,
+    onPromptChange: (String) -> Unit,
+    onSourceImageUrlChange: (String) -> Unit,
+    onModelSelected: (String) -> Unit,
+    onImageSettingsOpenChange: (Boolean) -> Unit,
+    onEditFromMessage: (Long) -> Unit,
+    onClearEditSource: () -> Unit,
+    onGenerate: () -> Unit,
+    onSaveRequested: (Long) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .imePadding(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        ImageChatControls(
+            state = state,
+            onModelSelected = onModelSelected
+        )
+        if (state.isGenerating) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+        if (state.imageModels.isEmpty()) {
+            EmptyHint(
+                text = "Включите модель с image или imagine в названии на странице моделей.",
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            )
+        } else if (state.messages.isEmpty()) {
+            EmptyHint(
+                text = "Опишите изображение ниже. После генерации чат сохранится здесь.",
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(
+                    items = state.messages,
+                    key = { it.id }
+                ) { message ->
+                    ImageMessageCard(
+                        message = message,
+                        isSaving = state.isSavingMessageId == message.id,
+                        onEdit = { onEditFromMessage(message.id) },
+                        onSave = { onSaveRequested(message.id) }
+                    )
+                }
+            }
+        }
+        ImagePromptBar(
+            state = state,
+            onPromptChange = onPromptChange,
+            onSourceImageUrlChange = onSourceImageUrlChange,
+            onClearEditSource = onClearEditSource,
+            onGenerate = onGenerate
+        )
     }
 }
 
 @Composable
 private fun ImageChatControls(
     state: ImageGenerationUiState,
-    onModelSelected: (String) -> Unit,
-    onChatSelected: (Long?) -> Unit,
-    onAspectRatioChange: (String) -> Unit,
-    onResolutionChange: (String) -> Unit
+    onModelSelected: (String) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         DropdownSelector(
-            label = "Модель",
+            label = if (state.imageModels.isEmpty()) "Нет image-моделей" else "Модель",
             options = state.imageModels,
             selectedOption = state.imageModels.firstOrNull { it.id == state.selectedModelId },
             optionLabel = { it.name.ifBlank { it.id } },
             onOptionSelected = { onModelSelected(it.id) },
             modifier = Modifier.fillMaxWidth()
         )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            DropdownSelector(
-                label = "Чат",
-                options = listOf<ImageChat?>(null) + state.chats,
-                selectedOption = state.chats.firstOrNull { it.id == state.selectedChatId },
-                optionLabel = { it?.title ?: "Новый image-чат" },
-                onOptionSelected = { onChatSelected(it?.id) },
-                modifier = Modifier.weight(1f)
-            )
-            DropdownSelector(
-                label = "Формат",
-                options = aspectRatios,
-                selectedOption = state.aspectRatio,
-                optionLabel = { it },
-                onOptionSelected = onAspectRatioChange,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        DropdownSelector(
-            label = "Разрешение",
-            options = resolutions,
-            selectedOption = state.resolution,
-            optionLabel = { it },
-            onOptionSelected = onResolutionChange,
-            modifier = Modifier.fillMaxWidth()
-        )
     }
+}
+
+@Composable
+private fun ImageSettingsDialog(
+    aspectRatio: String,
+    resolution: String,
+    onAspectRatioChange: (String) -> Unit,
+    onResolutionChange: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Настройки генерации") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                DropdownSelector(
+                    label = "Формат",
+                    options = aspectRatios,
+                    selectedOption = aspectRatio,
+                    optionLabel = { it },
+                    onOptionSelected = onAspectRatioChange,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                DropdownSelector(
+                    label = "Разрешение",
+                    options = resolutions,
+                    selectedOption = resolution,
+                    optionLabel = { it },
+                    onOptionSelected = onResolutionChange,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Готово")
+            }
+        }
+    )
 }
 
 @Composable
@@ -266,7 +450,8 @@ private fun ImagePromptBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding(),
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         state.editingMessageId?.let {
@@ -396,7 +581,7 @@ private fun EmptyHint(
     modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = modifier,
+        modifier = modifier.padding(horizontal = 24.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(

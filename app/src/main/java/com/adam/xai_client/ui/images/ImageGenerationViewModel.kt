@@ -35,6 +35,7 @@ data class ImageGenerationUiState(
     val messages: List<ImageChatMessage> = emptyList(),
     val imageModels: List<AiModel> = emptyList(),
     val selectedModelId: String? = null,
+    val isImageSettingsOpen: Boolean = false,
     val editingMessageId: Long? = null,
     val savedUri: Uri? = null,
     val isGenerating: Boolean = false,
@@ -61,7 +62,6 @@ class ImageGenerationViewModel(
                 _uiState.update { state ->
                     val selectedChatId = state.selectedChatId
                         ?.takeIf { chatId -> chats.any { it.id == chatId } }
-                        ?: if (state.isNewChatMode) null else chats.firstOrNull()?.id
                     state.copy(chats = chats, selectedChatId = selectedChatId)
                 }
             }
@@ -146,10 +146,42 @@ class ImageGenerationViewModel(
         }
     }
 
-    fun deleteSelectedChat() {
+    fun showChatList() {
+        _uiState.update {
+            it.copy(
+                selectedChatId = null,
+                isNewChatMode = false,
+                messages = emptyList(),
+                prompt = "",
+                sourceImageUrl = "",
+                editingMessageId = null,
+                isImageSettingsOpen = false,
+                error = null,
+                message = null
+            )
+        }
+    }
+
+    fun deleteChat(chatId: Long) {
         viewModelScope.launch {
-            val chatId = _uiState.value.selectedChatId ?: return@launch
             runCatching { imageRepository.deleteChat(chatId) }
+                .onSuccess {
+                    _uiState.update { state ->
+                        if (state.selectedChatId == chatId) {
+                            state.copy(
+                                selectedChatId = null,
+                                isNewChatMode = false,
+                                messages = emptyList(),
+                                editingMessageId = null,
+                                sourceImageUrl = "",
+                                error = null,
+                                message = null
+                            )
+                        } else {
+                            state
+                        }
+                    }
+                }
                 .onFailure { throwable ->
                     _uiState.update { it.copy(error = throwable.toUserMessage()) }
                 }
@@ -274,6 +306,10 @@ class ImageGenerationViewModel(
 
     fun clearTransientMessages() {
         _uiState.update { it.copy(error = null, message = null) }
+    }
+
+    fun setImageSettingsOpen(isOpen: Boolean) {
+        _uiState.update { it.copy(isImageSettingsOpen = isOpen) }
     }
 
     fun onStoragePermissionDenied() {
