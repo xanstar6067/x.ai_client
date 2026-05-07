@@ -24,7 +24,8 @@ class AppContainer(context: Context) {
     ).addMigrations(
         AppDatabase.MIGRATION_1_2,
         AppDatabase.MIGRATION_2_3,
-        AppDatabase.MIGRATION_3_4
+        AppDatabase.MIGRATION_3_4,
+        AppDatabase.MIGRATION_4_5
     ).build()
 
     val settingsRepository: SettingsRepository = SettingsRepository(
@@ -50,6 +51,7 @@ class AppContainer(context: Context) {
 
     val imageRepository: ImageRepository = ImageRepository(
         context = appContext,
+        database = database,
         settingsRepository = settingsRepository,
         apiClient = apiClient
     )

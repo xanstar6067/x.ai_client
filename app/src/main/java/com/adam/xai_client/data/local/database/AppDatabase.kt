@@ -8,11 +8,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.adam.xai_client.data.local.dao.AiModelDao
 import com.adam.xai_client.data.local.dao.ChatDao
 import com.adam.xai_client.data.local.dao.ChatModelSettingsDao
+import com.adam.xai_client.data.local.dao.ImageChatDao
+import com.adam.xai_client.data.local.dao.ImageMessageDao
 import com.adam.xai_client.data.local.dao.MessageDao
 import com.adam.xai_client.data.local.dao.ModelRoleDao
 import com.adam.xai_client.data.local.entity.AiModelEntity
 import com.adam.xai_client.data.local.entity.ChatModelSettingsEntity
 import com.adam.xai_client.data.local.entity.ChatEntity
+import com.adam.xai_client.data.local.entity.ImageChatEntity
+import com.adam.xai_client.data.local.entity.ImageMessageEntity
 import com.adam.xai_client.data.local.entity.MessageEntity
 import com.adam.xai_client.data.local.entity.ModelRoleEntity
 
@@ -22,9 +26,11 @@ import com.adam.xai_client.data.local.entity.ModelRoleEntity
         MessageEntity::class,
         AiModelEntity::class,
         ModelRoleEntity::class,
-        ChatModelSettingsEntity::class
+        ChatModelSettingsEntity::class,
+        ImageChatEntity::class,
+        ImageMessageEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -34,6 +40,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun aiModelDao(): AiModelDao
     abstract fun modelRoleDao(): ModelRoleDao
     abstract fun chatModelSettingsDao(): ChatModelSettingsDao
+    abstract fun imageChatDao(): ImageChatDao
+    abstract fun imageMessageDao(): ImageMessageDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -66,6 +74,38 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN tokenCount INTEGER")
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS image_chats (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        selectedModelId TEXT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS image_messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        chatId INTEGER NOT NULL,
+                        role TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        imageBytes BLOB,
+                        imageMimeType TEXT,
+                        sourceMessageId INTEGER,
+                        createdAt INTEGER NOT NULL,
+                        FOREIGN KEY(chatId) REFERENCES image_chats(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_image_messages_chatId ON image_messages(chatId)")
             }
         }
     }

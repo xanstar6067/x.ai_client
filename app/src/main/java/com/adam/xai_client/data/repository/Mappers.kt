@@ -3,11 +3,15 @@ package com.adam.xai_client.data.repository
 import com.adam.xai_client.data.local.entity.AiModelEntity
 import com.adam.xai_client.data.local.entity.ChatModelSettingsEntity
 import com.adam.xai_client.data.local.entity.ChatEntity
+import com.adam.xai_client.data.local.entity.ImageChatEntity
+import com.adam.xai_client.data.local.entity.ImageMessageEntity
 import com.adam.xai_client.data.local.entity.MessageEntity
 import com.adam.xai_client.data.local.entity.ModelRoleEntity
 import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.Chat
+import com.adam.xai_client.domain.model.ImageChat
+import com.adam.xai_client.domain.model.ImageChatMessage
 import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.ModelRole
 
@@ -27,6 +31,25 @@ internal fun MessageEntity.asDomain(): Message = Message(
     content = content,
     reasoningContent = reasoningContent,
     tokenCount = tokenCount ?: 0,
+    createdAt = createdAt
+)
+
+internal fun ImageChatEntity.asDomain(): ImageChat = ImageChat(
+    id = id,
+    title = title,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+    selectedModelId = selectedModelId
+)
+
+internal fun ImageMessageEntity.asDomain(): ImageChatMessage = ImageChatMessage(
+    id = id,
+    chatId = chatId,
+    role = role,
+    content = content,
+    imageBytes = imageBytes,
+    imageMimeType = imageMimeType,
+    sourceMessageId = sourceMessageId,
     createdAt = createdAt
 )
 

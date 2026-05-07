@@ -156,7 +156,7 @@ class KtorXaiApiClient(
             if (sourceImageUrl.isBlank()) {
                 setBody(
                     ImageGenerationRequestDto(
-                        model = IMAGE_MODEL,
+                        model = options.modelId,
                         prompt = options.prompt,
                         n = 1,
                         aspectRatio = options.aspectRatio,
@@ -166,7 +166,7 @@ class KtorXaiApiClient(
             } else {
                 setBody(
                     ImageEditRequestDto(
-                        model = IMAGE_MODEL,
+                        model = options.modelId,
                         prompt = options.prompt,
                         image = ImageReferenceDto(url = sourceImageUrl),
                         aspectRatio = options.aspectRatio,
@@ -386,8 +386,6 @@ class KtorXaiApiClient(
         throw XaiApiException(status.value, readable)
     }
 }
-
-private const val IMAGE_MODEL = "grok-imagine-image"
 
 class XaiApiException(
     val statusCode: Int,

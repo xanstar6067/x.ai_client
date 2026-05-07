@@ -6,20 +6,59 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import com.adam.xai_client.data.local.database.AppDatabase
+import com.adam.xai_client.data.local.entity.ImageChatEntity
+import com.adam.xai_client.data.local.entity.ImageMessageEntity
 import com.adam.xai_client.data.remote.api.XaiApiClient
+import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.GeneratedImage
+import com.adam.xai_client.domain.model.ImageChat
+import com.adam.xai_client.domain.model.ImageChatMessage
 import com.adam.xai_client.domain.model.ImageGenerationOptions
+import com.adam.xai_client.domain.model.MessageRole
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import java.io.File
+import java.util.Base64
 
 class ImageRepository(
     private val context: Context,
+    private val database: AppDatabase,
     private val settingsRepository: SettingsRepository,
     private val apiClient: XaiApiClient
 ) {
+    private val imageChatDao = database.imageChatDao()
+    private val imageMessageDao = database.imageMessageDao()
+    private val aiModelDao = database.aiModelDao()
+
+    val imageChats: Flow<List<ImageChat>> = imageChatDao.observeChats()
+        .map { entities -> entities.map { it.asDomain() } }
+
+    val imageModels: Flow<List<AiModel>> = aiModelDao.observeEnabledModels()
+        .map { entities ->
+            entities
+                .map { it.asDomain() }
+                .filter { it.isImageGenerationModel() }
+        }
+
+    fun observeMessages(chatId: Long?): Flow<List<ImageChatMessage>> {
+        return if (chatId == null) {
+            flowOf(emptyList())
+        } else {
+            imageMessageDao.observeMessages(chatId).map { entities ->
+                entities.map { it.asDomain() }
+            }
+        }
+    }
+
     suspend fun generateImage(options: ImageGenerationOptions): GeneratedImage {
         val prompt = options.prompt.trim()
         if (prompt.isBlank()) {
             throw IllegalArgumentException("Введите описание изображения.")
+        }
+        if (options.modelId.isBlank()) {
+            throw IllegalArgumentException("Выберите модель для генерации изображений.")
         }
 
         val settings = settingsRepository.currentApiSettings()
@@ -34,8 +73,92 @@ class ImageRepository(
         )
     }
 
+    suspend fun createChat(
+        title: String,
+        selectedModelId: String?,
+        now: Long = System.currentTimeMillis()
+    ): Long {
+        return imageChatDao.insertChat(
+            ImageChatEntity(
+                title = title.ifBlank { NEW_CHAT_TITLE },
+                createdAt = now,
+                updatedAt = now,
+                selectedModelId = selectedModelId
+            )
+        )
+    }
+
+    suspend fun deleteChat(chatId: Long) {
+        imageChatDao.deleteChatById(chatId)
+    }
+
+    suspend fun addUserMessage(
+        chatId: Long,
+        content: String,
+        now: Long = System.currentTimeMillis()
+    ): Long {
+        return imageMessageDao.insertMessage(
+            ImageMessageEntity(
+                chatId = chatId,
+                role = MessageRole.USER,
+                content = content.trim(),
+                createdAt = now
+            )
+        )
+    }
+
+    suspend fun addAssistantImageMessage(
+        chatId: Long,
+        content: String,
+        image: GeneratedImage,
+        sourceMessageId: Long?,
+        now: Long = System.currentTimeMillis()
+    ): Long {
+        return imageMessageDao.insertMessage(
+            ImageMessageEntity(
+                chatId = chatId,
+                role = MessageRole.ASSISTANT,
+                content = content,
+                imageBytes = image.bytes,
+                imageMimeType = image.mimeType,
+                sourceMessageId = sourceMessageId,
+                createdAt = now
+            )
+        )
+    }
+
+    suspend fun updateChatAfterGeneration(
+        chatId: Long,
+        title: String,
+        selectedModelId: String?,
+        updatedAt: Long = System.currentTimeMillis()
+    ) {
+        val current = imageChatDao.getChat(chatId) ?: return
+        imageChatDao.updateChat(
+            current.copy(
+                title = if (current.title == NEW_CHAT_TITLE) title else current.title,
+                selectedModelId = selectedModelId,
+                updatedAt = updatedAt
+            )
+        )
+    }
+
+    suspend fun getMessages(chatId: Long): List<ImageChatMessage> {
+        return imageMessageDao.getMessages(chatId).map { it.asDomain() }
+    }
+
+    fun imageAsDataUrl(image: GeneratedImage): String {
+        val base64 = Base64.getEncoder().encodeToString(image.bytes)
+        return "data:${image.mimeType};base64,$base64"
+    }
+
     fun saveImage(image: GeneratedImage): Uri {
-        val fileName = "xai_image_${System.currentTimeMillis()}.jpg"
+        val extension = when (image.mimeType.substringAfterLast('/')) {
+            "png" -> "png"
+            "webp" -> "webp"
+            else -> "jpg"
+        }
+        val fileName = "xai_image_${System.currentTimeMillis()}.$extension"
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             saveImageScoped(image = image, fileName = fileName)
         } else {
@@ -87,5 +210,11 @@ class ImageRepository(
 
     private companion object {
         const val APP_PICTURES_DIR = "xAI Chat"
+        const val NEW_CHAT_TITLE = "Новый image-чат"
     }
+}
+
+private fun AiModel.isImageGenerationModel(): Boolean {
+    val searchable = "$id $name".lowercase()
+    return "image" in searchable || "imagine" in searchable
 }

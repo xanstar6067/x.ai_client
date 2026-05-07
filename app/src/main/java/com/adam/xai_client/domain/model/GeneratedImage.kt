@@ -18,6 +18,7 @@ data class GeneratedImage(
 }
 
 data class ImageGenerationOptions(
+    val modelId: String,
     val prompt: String,
     val aspectRatio: String? = null,
     val resolution: String? = null,

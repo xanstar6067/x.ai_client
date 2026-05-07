@@ -8,12 +8,19 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.adam.xai_client.AppContainer
 import com.adam.xai_client.data.repository.ImageRepository
+import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.GeneratedImage
+import com.adam.xai_client.domain.model.ImageChat
+import com.adam.xai_client.domain.model.ImageChatMessage
 import com.adam.xai_client.domain.model.ImageGenerationOptions
 import com.adam.xai_client.ui.components.toUserMessage
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -22,10 +29,16 @@ data class ImageGenerationUiState(
     val sourceImageUrl: String = "",
     val aspectRatio: String = "auto",
     val resolution: String = "1k",
-    val generatedImage: GeneratedImage? = null,
+    val chats: List<ImageChat> = emptyList(),
+    val selectedChatId: Long? = null,
+    val isNewChatMode: Boolean = false,
+    val messages: List<ImageChatMessage> = emptyList(),
+    val imageModels: List<AiModel> = emptyList(),
+    val selectedModelId: String? = null,
+    val editingMessageId: Long? = null,
     val savedUri: Uri? = null,
     val isGenerating: Boolean = false,
-    val isSaving: Boolean = false,
+    val isSavingMessageId: Long? = null,
     val error: String? = null,
     val message: String? = null
 )
@@ -35,6 +48,42 @@ class ImageGenerationViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ImageGenerationUiState())
     val uiState: StateFlow<ImageGenerationUiState> = _uiState.asStateFlow()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val selectedChatMessages = uiState
+        .map { it.selectedChatId }
+        .distinctUntilChanged()
+        .flatMapLatest { chatId -> imageRepository.observeMessages(chatId) }
+
+    init {
+        viewModelScope.launch {
+            imageRepository.imageChats.collect { chats ->
+                _uiState.update { state ->
+                    val selectedChatId = state.selectedChatId
+                        ?.takeIf { chatId -> chats.any { it.id == chatId } }
+                        ?: if (state.isNewChatMode) null else chats.firstOrNull()?.id
+                    state.copy(chats = chats, selectedChatId = selectedChatId)
+                }
+            }
+        }
+        viewModelScope.launch {
+            imageRepository.imageModels.collect { models ->
+                _uiState.update { state ->
+                    val selectedModelId = state.selectedModelId
+                        ?.takeIf { modelId -> models.any { it.id == modelId } }
+                        ?: state.chats.firstOrNull { it.id == state.selectedChatId }?.selectedModelId
+                            ?.takeIf { modelId -> models.any { it.id == modelId } }
+                        ?: models.firstOrNull()?.id
+                    state.copy(imageModels = models, selectedModelId = selectedModelId)
+                }
+            }
+        }
+        viewModelScope.launch {
+            selectedChatMessages.collect { messages ->
+                _uiState.update { it.copy(messages = messages) }
+            }
+        }
+    }
 
     fun onPromptChange(value: String) {
         _uiState.update { it.copy(prompt = value, error = null, message = null) }
@@ -52,32 +101,127 @@ class ImageGenerationViewModel(
         _uiState.update { it.copy(resolution = value, error = null, message = null) }
     }
 
+    fun onModelSelected(modelId: String) {
+        _uiState.update { it.copy(selectedModelId = modelId, error = null, message = null) }
+    }
+
+    fun onChatSelected(chatId: Long?) {
+        _uiState.update {
+            val chatModelId = it.chats
+                .firstOrNull { chat -> chat.id == chatId }
+                ?.selectedModelId
+                ?.takeIf { modelId -> it.imageModels.any { model -> model.id == modelId } }
+            it.copy(
+                selectedChatId = chatId,
+                isNewChatMode = chatId == null,
+                selectedModelId = chatModelId ?: it.selectedModelId,
+                editingMessageId = null,
+                sourceImageUrl = "",
+                error = null,
+                message = null
+            )
+        }
+    }
+
+    fun newChat() {
+        _uiState.update {
+            it.copy(
+                selectedChatId = null,
+                isNewChatMode = true,
+                messages = emptyList(),
+                prompt = "",
+                sourceImageUrl = "",
+                editingMessageId = null,
+                error = null,
+                message = null
+            )
+        }
+    }
+
+    fun deleteSelectedChat() {
+        viewModelScope.launch {
+            val chatId = _uiState.value.selectedChatId ?: return@launch
+            runCatching { imageRepository.deleteChat(chatId) }
+                .onFailure { throwable ->
+                    _uiState.update { it.copy(error = throwable.toUserMessage()) }
+                }
+        }
+    }
+
+    fun editFromMessage(messageId: Long) {
+        _uiState.update {
+            it.copy(
+                editingMessageId = messageId,
+                sourceImageUrl = "",
+                error = null,
+                message = "Следующий запрос будет редактировать выбранную картинку."
+            )
+        }
+    }
+
+    fun clearEditSource() {
+        _uiState.update { it.copy(editingMessageId = null, message = null, error = null) }
+    }
+
     fun generate() {
         viewModelScope.launch {
             val state = _uiState.value
+            val prompt = state.prompt.trim()
+            if (prompt.isBlank()) {
+                _uiState.update { it.copy(error = "Введите описание изображения.") }
+                return@launch
+            }
+            val modelId = state.selectedModelId
+            if (modelId.isNullOrBlank()) {
+                _uiState.update {
+                    it.copy(error = "Включите image/imagine модель на странице моделей и выберите ее здесь.")
+                }
+                return@launch
+            }
+
             _uiState.update {
-                it.copy(
-                    isGenerating = true,
-                    generatedImage = null,
-                    savedUri = null,
-                    error = null,
-                    message = null
-                )
+                it.copy(isGenerating = true, savedUri = null, error = null, message = null)
             }
 
             runCatching {
-                imageRepository.generateImage(
+                val chatId = state.selectedChatId ?: imageRepository.createChat(
+                    title = prompt.toImageChatTitle(),
+                    selectedModelId = modelId
+                )
+                val sourceDataUrl = state.editingMessageId?.let { messageId ->
+                    state.messages.firstOrNull { it.id == messageId }?.generatedImage
+                        ?.let { imageRepository.imageAsDataUrl(it) }
+                }
+                imageRepository.addUserMessage(chatId = chatId, content = prompt)
+                val image = imageRepository.generateImage(
                     ImageGenerationOptions(
-                        prompt = state.prompt,
+                        modelId = modelId,
+                        prompt = prompt,
                         aspectRatio = state.aspectRatio.takeUnless { it == "auto" },
                         resolution = state.resolution,
-                        sourceImageUrl = state.sourceImageUrl.trim().ifBlank { null }
+                        sourceImageUrl = sourceDataUrl ?: state.sourceImageUrl.trim().ifBlank { null }
                     )
                 )
-            }.onSuccess { image ->
+                imageRepository.addAssistantImageMessage(
+                    chatId = chatId,
+                    content = prompt,
+                    image = image,
+                    sourceMessageId = state.editingMessageId
+                )
+                imageRepository.updateChatAfterGeneration(
+                    chatId = chatId,
+                    title = prompt.toImageChatTitle(),
+                    selectedModelId = modelId
+                )
+                chatId
+            }.onSuccess { chatId ->
                 _uiState.update {
                     it.copy(
-                        generatedImage = image,
+                        selectedChatId = chatId,
+                        isNewChatMode = false,
+                        prompt = "",
+                        sourceImageUrl = "",
+                        editingMessageId = null,
                         isGenerating = false,
                         message = null,
                         error = null
@@ -94,15 +238,18 @@ class ImageGenerationViewModel(
         }
     }
 
-    fun save() {
+    fun save(messageId: Long) {
         viewModelScope.launch {
-            val image = _uiState.value.generatedImage ?: return@launch
-            _uiState.update { it.copy(isSaving = true, error = null, message = null) }
+            val image = _uiState.value.messages
+                .firstOrNull { it.id == messageId }
+                ?.generatedImage
+                ?: return@launch
+            _uiState.update { it.copy(isSavingMessageId = messageId, error = null, message = null) }
             runCatching { imageRepository.saveImage(image) }
                 .onSuccess { uri ->
                     _uiState.update {
                         it.copy(
-                            isSaving = false,
+                            isSavingMessageId = null,
                             savedUri = uri,
                             message = "Изображение сохранено в Pictures/xAI Chat.",
                             error = null
@@ -111,7 +258,7 @@ class ImageGenerationViewModel(
                 }
                 .onFailure { throwable ->
                     _uiState.update {
-                        it.copy(isSaving = false, error = throwable.toUserMessage())
+                        it.copy(isSavingMessageId = null, error = throwable.toUserMessage())
                     }
                 }
         }
@@ -132,4 +279,11 @@ class ImageGenerationViewModel(
             }
         }
     }
+}
+
+private fun String.toImageChatTitle(): String {
+    return trim()
+        .replace(Regex("\\s+"), " ")
+        .take(48)
+        .ifBlank { "Новый image-чат" }
 }
