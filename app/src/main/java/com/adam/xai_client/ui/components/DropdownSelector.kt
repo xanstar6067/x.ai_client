@@ -1,13 +1,17 @@
 package com.adam.xai_client.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MenuDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun <T> DropdownSelector(
@@ -34,7 +39,8 @@ fun <T> DropdownSelector(
     OutlinedButton(
         modifier = modifier,
         enabled = enabled && options.isNotEmpty(),
-        onClick = { expanded = true }
+        onClick = { expanded = true },
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -42,7 +48,7 @@ fun <T> DropdownSelector(
         ) {
             Text(
                 text = selectedText,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
@@ -56,18 +62,43 @@ fun <T> DropdownSelector(
             onDismissRequest = { expanded = false }
         ) {
             options.forEach { option ->
+                val selected = option == selectedOption
                 DropdownMenuItem(
                     text = {
                         Text(
                             text = optionLabel(option),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
                         )
+                    },
+                    leadingIcon = if (selected) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    } else {
+                        null
                     },
                     onClick = {
                         expanded = false
                         onOptionSelected(option)
-                    }
+                    },
+                    colors = MenuDefaults.itemColors(
+                        textColor = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                        leadingIconColor = MaterialTheme.colorScheme.primary
+                    )
                 )
             }
         }
