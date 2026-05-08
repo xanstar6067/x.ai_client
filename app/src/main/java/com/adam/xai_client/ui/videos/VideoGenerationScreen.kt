@@ -1,12 +1,12 @@
-package com.adam.xai_client.ui.images
+package com.adam.xai_client.ui.videos
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
 import android.os.Build
+import android.widget.MediaController
+import android.widget.VideoView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,17 +30,15 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -63,8 +61,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -73,38 +69,38 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.adam.xai_client.domain.model.GeneratedImage
-import com.adam.xai_client.domain.model.ImageChat
-import com.adam.xai_client.domain.model.ImageChatMessage
+import com.adam.xai_client.domain.model.GeneratedVideo
 import com.adam.xai_client.domain.model.MessageRole
-import com.adam.xai_client.domain.model.toUsdPerImage
+import com.adam.xai_client.domain.model.VideoChat
+import com.adam.xai_client.domain.model.VideoChatMessage
 import com.adam.xai_client.ui.components.DropdownSelector
 import com.adam.xai_client.ui.components.ModelInfoDialog
 import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
+import java.io.File
 import java.text.DateFormat
 import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ImageGenerationScreen(
-    state: ImageGenerationUiState,
+fun VideoGenerationScreen(
+    state: VideoGenerationUiState,
     onPromptChange: (String) -> Unit,
     onSourceImageUrlChange: (String) -> Unit,
+    onDurationChange: (Int) -> Unit,
     onAspectRatioChange: (String) -> Unit,
     onResolutionChange: (String) -> Unit,
     onModelSelected: (String) -> Unit,
     onChatSelected: (Long?) -> Unit,
     onNewChat: () -> Unit,
     onDeleteChat: (Long) -> Unit,
-    onImageSettingsOpenChange: (Boolean) -> Unit,
+    onVideoSettingsOpenChange: (Boolean) -> Unit,
     onModelInfoOpenChange: (Boolean) -> Unit,
     onShowChatList: () -> Unit,
-    onEditFromMessage: (Long) -> Unit,
     onUpdateUserMessage: (Long, String) -> Unit,
     onDeleteMessage: (Long) -> Unit,
-    onClearEditSource: () -> Unit,
     onGenerate: () -> Unit,
     onGenerateFromMessage: (Long) -> Unit,
     onRegenerate: (Long) -> Unit,
@@ -118,7 +114,7 @@ fun ImageGenerationScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     var pendingSaveMessageId by remember { mutableLongStateOf(0L) }
-    var chatPendingDeletion by remember { mutableStateOf<ImageChat?>(null) }
+    var chatPendingDeletion by remember { mutableStateOf<VideoChat?>(null) }
     val isChatOpen = state.selectedChatId != null || state.isNewChatMode
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -145,7 +141,7 @@ fun ImageGenerationScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (isChatOpen) "ImageGen чат" else "ImageGen чаты",
+                        text = if (isChatOpen) "VideoGen чат" else "VideoGen чаты",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -163,7 +159,7 @@ fun ImageGenerationScreen(
                         Icon(Icons.Filled.Info, contentDescription = "Лимиты модели")
                     }
                     IconButton(
-                        onClick = { onImageSettingsOpenChange(true) },
+                        onClick = { onVideoSettingsOpenChange(true) },
                         enabled = isChatOpen && state.selectedModelId != null
                     ) {
                         Icon(Icons.Default.Settings, contentDescription = "Настройки генерации")
@@ -177,31 +173,28 @@ fun ImageGenerationScreen(
                     onClick = onNewChat,
                     modifier = Modifier.navigationBarsPadding()
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Новый чат изображений")
+                    Icon(Icons.Default.Add, contentDescription = "Новый видеочат")
                 }
             }
         }
     ) { padding ->
         if (!isChatOpen) {
-            ImageChatList(
+            VideoChatList(
                 state = state,
                 padding = padding,
                 onOpenChat = { onChatSelected(it) },
                 onDeleteChat = { chatPendingDeletion = it }
             )
         } else {
-            ImageChatContent(
+            VideoChatContent(
                 state = state,
                 padding = padding,
                 onPromptChange = onPromptChange,
                 onSourceImageUrlChange = onSourceImageUrlChange,
                 onModelSelected = onModelSelected,
-                onImageSettingsOpenChange = onImageSettingsOpenChange,
-                onEditFromMessage = onEditFromMessage,
                 onUpdateUserMessage = onUpdateUserMessage,
                 onDeleteMessage = onDeleteMessage,
                 onCopyMessage = { text -> clipboardManager.setText(AnnotatedString(text)) },
-                onClearEditSource = onClearEditSource,
                 onGenerate = onGenerate,
                 onGenerateFromMessage = onGenerateFromMessage,
                 onRegenerate = onRegenerate,
@@ -218,13 +211,15 @@ fun ImageGenerationScreen(
         }
     }
 
-    if (state.isImageSettingsOpen) {
-        ImageSettingsDialog(
+    if (state.isVideoSettingsOpen) {
+        VideoSettingsDialog(
+            durationSeconds = state.durationSeconds,
             aspectRatio = state.aspectRatio,
             resolution = state.resolution,
+            onDurationChange = onDurationChange,
             onAspectRatioChange = onAspectRatioChange,
             onResolutionChange = onResolutionChange,
-            onDismiss = { onImageSettingsOpenChange(false) }
+            onDismiss = { onVideoSettingsOpenChange(false) }
         )
     }
 
@@ -241,7 +236,7 @@ fun ImageGenerationScreen(
             onDismissRequest = { chatPendingDeletion = null },
             title = { Text("Удалить чат?") },
             text = {
-                Text("Чат \"${chat.title}\" и все сгенерированные изображения будут удалены без восстановления.")
+                Text("Чат \"${chat.title}\" и все сгенерированные видео будут удалены без восстановления.")
             },
             confirmButton = {
                 TextButton(
@@ -263,11 +258,11 @@ fun ImageGenerationScreen(
 }
 
 @Composable
-private fun ImageChatList(
-    state: ImageGenerationUiState,
+private fun VideoChatList(
+    state: VideoGenerationUiState,
     padding: PaddingValues,
     onOpenChat: (Long) -> Unit,
-    onDeleteChat: (ImageChat) -> Unit
+    onDeleteChat: (VideoChat) -> Unit
 ) {
     if (state.chats.isEmpty()) {
         Column(
@@ -279,12 +274,12 @@ private fun ImageChatList(
             verticalArrangement = Arrangement.Center
         ) {
             Icon(
-                imageVector = Icons.Default.Tune,
+                imageVector = Icons.Default.Movie,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = "ImageGen чатов пока нет",
+                text = "VideoGen чатов пока нет",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(top = 12.dp)
             )
@@ -301,7 +296,7 @@ private fun ImageChatList(
                 items = state.chats,
                 key = { it.id }
             ) { chat ->
-                ImageChatCard(
+                VideoChatCard(
                     chat = chat,
                     onClick = { onOpenChat(chat.id) },
                     onDelete = { onDeleteChat(chat) }
@@ -312,8 +307,8 @@ private fun ImageChatList(
 }
 
 @Composable
-private fun ImageChatCard(
-    chat: ImageChat,
+private fun VideoChatCard(
+    chat: VideoChat,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -352,18 +347,15 @@ private fun ImageChatCard(
 }
 
 @Composable
-private fun ImageChatContent(
-    state: ImageGenerationUiState,
+private fun VideoChatContent(
+    state: VideoGenerationUiState,
     padding: PaddingValues,
     onPromptChange: (String) -> Unit,
     onSourceImageUrlChange: (String) -> Unit,
     onModelSelected: (String) -> Unit,
-    onImageSettingsOpenChange: (Boolean) -> Unit,
-    onEditFromMessage: (Long) -> Unit,
     onUpdateUserMessage: (Long, String) -> Unit,
     onDeleteMessage: (Long) -> Unit,
     onCopyMessage: (String) -> Unit,
-    onClearEditSource: () -> Unit,
     onGenerate: () -> Unit,
     onGenerateFromMessage: (Long) -> Unit,
     onRegenerate: (Long) -> Unit,
@@ -376,23 +368,33 @@ private fun ImageChatContent(
             .padding(padding),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        ImageChatControls(
+        VideoChatControls(
             state = state,
             onModelSelected = onModelSelected
         )
         if (state.isGenerating) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Text(
+                text = buildString {
+                    append("Генерация видео")
+                    state.generationProgress?.let { append(" $it%") }
+                    state.generationRequestId?.let { append(" · $it") }
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
         }
-        if (state.imageModels.isEmpty()) {
+        if (state.videoModels.isEmpty()) {
             EmptyHint(
-                text = "Включите модель с image или imagine в названии на странице моделей.",
+                text = "Включите модель с video или imagine в названии на странице моделей.",
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
             )
         } else if (state.messages.isEmpty()) {
             EmptyHint(
-                text = "Опишите изображение ниже. После генерации чат сохранится здесь.",
+                text = "Опишите видео ниже. После генерации чат сохранится здесь.",
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -409,12 +411,11 @@ private fun ImageChatContent(
                     items = state.messages,
                     key = { it.id }
                 ) { message ->
-                    ImageMessageCard(
+                    VideoMessageCard(
                         message = message,
                         isSaving = state.isSavingMessageId == message.id,
                         isGenerating = state.isGenerating,
                         onCopy = { onCopyMessage(message.content) },
-                        onEdit = { onEditFromMessage(message.id) },
                         onUpdateUserMessage = { text -> onUpdateUserMessage(message.id, text) },
                         onDelete = { onDeleteMessage(message.id) },
                         onGenerateFromUser = { onGenerateFromMessage(message.id) },
@@ -426,19 +427,18 @@ private fun ImageChatContent(
                 }
             }
         }
-        ImagePromptBar(
+        VideoPromptBar(
             state = state,
             onPromptChange = onPromptChange,
             onSourceImageUrlChange = onSourceImageUrlChange,
-            onClearEditSource = onClearEditSource,
             onGenerate = onGenerate
         )
     }
 }
 
 @Composable
-private fun ImageChatControls(
-    state: ImageGenerationUiState,
+private fun VideoChatControls(
+    state: VideoGenerationUiState,
     onModelSelected: (String) -> Unit
 ) {
     Column(
@@ -448,14 +448,10 @@ private fun ImageChatControls(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         DropdownSelector(
-            label = if (state.imageModels.isEmpty()) "Нет image-моделей" else "Модель",
-            options = state.imageModels,
-            selectedOption = state.imageModels.firstOrNull { it.id == state.selectedModelId },
-            optionLabel = { model ->
-                model.imagePrice?.let { price ->
-                    "${model.name.ifBlank { model.id }} (${price.toUsdPerImage()} / image)"
-                } ?: model.name.ifBlank { model.id }
-            },
+            label = if (state.videoModels.isEmpty()) "Нет video-моделей" else "Модель",
+            options = state.videoModels,
+            selectedOption = state.videoModels.firstOrNull { it.id == state.selectedModelId },
+            optionLabel = { model -> model.name.ifBlank { model.id } },
             onOptionSelected = { onModelSelected(it.id) },
             modifier = Modifier.fillMaxWidth()
         )
@@ -463,9 +459,11 @@ private fun ImageChatControls(
 }
 
 @Composable
-private fun ImageSettingsDialog(
+private fun VideoSettingsDialog(
+    durationSeconds: Int,
     aspectRatio: String,
     resolution: String,
+    onDurationChange: (Int) -> Unit,
     onAspectRatioChange: (String) -> Unit,
     onResolutionChange: (String) -> Unit,
     onDismiss: () -> Unit
@@ -475,6 +473,14 @@ private fun ImageSettingsDialog(
         title = { Text("Настройки генерации") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                DropdownSelector(
+                    label = "Длительность",
+                    options = durationOptions,
+                    selectedOption = durationSeconds,
+                    optionLabel = { "$it с" },
+                    onOptionSelected = onDurationChange,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 DropdownSelector(
                     label = "Формат",
                     options = aspectRatios,
@@ -502,11 +508,10 @@ private fun ImageSettingsDialog(
 }
 
 @Composable
-private fun ImagePromptBar(
-    state: ImageGenerationUiState,
+private fun VideoPromptBar(
+    state: VideoGenerationUiState,
     onPromptChange: (String) -> Unit,
     onSourceImageUrlChange: (String) -> Unit,
-    onClearEditSource: () -> Unit,
     onGenerate: () -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -523,19 +528,9 @@ private fun ImagePromptBar(
             .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        state.editingMessageId?.let {
-            AssistChip(
-                onClick = onClearEditSource,
-                label = { Text("Редактируется выбранная картинка") },
-                trailingIcon = {
-                    Icon(Icons.Default.Close, contentDescription = "Сбросить")
-                }
-            )
-        }
         OutlinedTextField(
             value = state.sourceImageUrl,
             onValueChange = onSourceImageUrlChange,
-            enabled = state.editingMessageId == null,
             label = { Text("URL исходной картинки") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(
@@ -575,12 +570,11 @@ private fun ImagePromptBar(
 }
 
 @Composable
-private fun ImageMessageCard(
-    message: ImageChatMessage,
+private fun VideoMessageCard(
+    message: VideoChatMessage,
     isSaving: Boolean,
     isGenerating: Boolean,
     onCopy: () -> Unit,
-    onEdit: () -> Unit,
     onUpdateUserMessage: (String) -> Unit,
     onDelete: () -> Unit,
     onGenerateFromUser: () -> Unit,
@@ -606,17 +600,21 @@ private fun ImageMessageCard(
             Text(
                 text = message.content,
                 style = MaterialTheme.typography.bodyMedium,
-                maxLines = if (message.generatedImage == null) Int.MAX_VALUE else 3,
+                maxLines = if (message.generatedVideo == null) Int.MAX_VALUE else 3,
                 overflow = TextOverflow.Ellipsis
             )
-            message.generatedImage?.let { image ->
-                ImagePreview(image = image)
+            message.sourceImageUrl?.takeIf { it.isNotBlank() }?.let { url ->
+                Text(
+                    text = "Исходная картинка: $url",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            message.generatedVideo?.let { video ->
+                VideoPreview(video = video, aspectRatio = message.aspectRatio)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = null)
-                        Spacer(Modifier.padding(3.dp))
-                        Text("Редактировать")
-                    }
                     TextButton(
                         onClick = onSave,
                         enabled = !isSaving
@@ -756,26 +754,40 @@ private fun ImageMessageCard(
 }
 
 @Composable
-private fun ImagePreview(image: GeneratedImage) {
-    val bitmap = remember(image) {
-        BitmapFactory.decodeByteArray(image.bytes, 0, image.bytes.size)
-    }
+private fun VideoPreview(video: GeneratedVideo, aspectRatio: String?) {
+    val file = remember(video.filePath) { File(video.filePath) }
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f),
+            .aspectRatio(aspectRatio.toPreviewRatio()),
         contentAlignment = Alignment.Center
     ) {
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Text("Не удалось открыть изображение")
+        if (!file.exists()) {
+            Text("Не удалось открыть видео")
+            return@Box
         }
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { context ->
+                VideoView(context).apply {
+                    val controller = MediaController(context)
+                    controller.setAnchorView(this)
+                    setMediaController(controller)
+                    setVideoPath(file.absolutePath)
+                    setOnPreparedListener { player ->
+                        player.isLooping = false
+                        seekTo(1)
+                    }
+                }
+            },
+            update = { view ->
+                if (view.tag != video.filePath) {
+                    view.tag = video.filePath
+                    view.setVideoPath(file.absolutePath)
+                    view.seekTo(1)
+                }
+            }
+        )
     }
 }
 
@@ -804,17 +816,27 @@ private fun requiresWritePermission(context: android.content.Context): Boolean {
         ) != PackageManager.PERMISSION_GRANTED
 }
 
+private fun String?.toPreviewRatio(): Float {
+    val parts = this?.split(":").orEmpty()
+    val width = parts.getOrNull(0)?.toFloatOrNull()
+    val height = parts.getOrNull(1)?.toFloatOrNull()
+    return if (width != null && height != null && height > 0f) {
+        width / height
+    } else {
+        16f / 9f
+    }
+}
+
+private val durationOptions = (1..15).toList()
+
 private val aspectRatios = listOf(
-    "auto",
     "1:1",
     "16:9",
     "9:16",
     "4:3",
     "3:4",
     "3:2",
-    "2:3",
-    "2:1",
-    "1:2"
+    "2:3"
 )
 
-private val resolutions = listOf("1k", "2k")
+private val resolutions = listOf("480p", "720p")

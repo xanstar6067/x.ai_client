@@ -270,3 +270,48 @@ data class ImageDataDto(
     @SerialName("b64_json")
     val b64Json: String? = null
 )
+
+@Serializable
+data class VideoGenerationRequestDto(
+    val model: String,
+    val prompt: String,
+    val image: VideoReferenceDto? = null,
+    val duration: Int? = null,
+    @SerialName("aspect_ratio")
+    val aspectRatio: String? = null,
+    val resolution: String? = null
+)
+
+@Serializable
+data class VideoReferenceDto(
+    val url: String
+)
+
+@Serializable
+data class VideoGenerationStartResponseDto(
+    @SerialName("request_id")
+    val requestId: String
+)
+
+@Serializable
+data class VideoGenerationStatusResponseDto(
+    val status: String,
+    val progress: Int? = null,
+    val video: VideoResultDto? = null,
+    val model: String? = null,
+    val error: VideoErrorDto? = null
+)
+
+@Serializable
+data class VideoResultDto(
+    val url: String? = null,
+    val duration: Int? = null,
+    @SerialName("respect_moderation")
+    val respectModeration: Boolean? = null
+)
+
+@Serializable
+data class VideoErrorDto(
+    val code: String? = null,
+    val message: String? = null
+)

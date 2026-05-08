@@ -18,6 +18,7 @@ import com.adam.xai_client.domain.model.ModelLimits
 import com.adam.xai_client.domain.model.ModelRole
 import com.adam.xai_client.domain.model.ReasoningEffort
 import com.adam.xai_client.domain.model.XaiModelLimits
+import com.adam.xai_client.domain.model.isTextChatModel
 import com.adam.xai_client.domain.token.TokenCounter
 import com.adam.xai_client.domain.usecase.MessageSendFailedException
 import com.adam.xai_client.domain.usecase.SendMessageUseCase
@@ -124,7 +125,8 @@ class ChatViewModel(
             modelRepository.models.collect { models ->
                 latestModels = models
                 val selectedModelId = _uiState.value.selectedModelId
-                    ?: models.firstOrNull { it.isEnabledForChat }?.id
+                    ?.takeIf { it.isTextChatModelId(models) }
+                    ?: models.firstOrNull { it.isEnabledForChat && it.isTextChatModel() }?.id
                 _uiState.update {
                     it.copy(
                         selectedModelId = selectedModelId,
@@ -454,21 +456,23 @@ class ChatViewModel(
     }
 
     private fun updateAvailableModels(selectedModelId: String?) {
-        val enabledModels = latestModels.filter { it.isEnabledForChat }
+        val enabledModels = latestModels.filter { it.isEnabledForChat && it.isTextChatModel() }
         val selectedModel = selectedModelId?.let { selected ->
             latestModels.firstOrNull { it.id == selected } ?: AiModel(
                 id = selected,
                 name = selected,
                 isEnabledForChat = true
             )
-        }
+        }?.takeIf { it.isTextChatModel() }
+        val effectiveSelectedModel = selectedModel ?: enabledModels.firstOrNull()
         val available = (enabledModels + listOfNotNull(selectedModel))
             .distinctBy { it.id }
             .sortedBy { it.name.lowercase() }
         _uiState.update {
             it.copy(
                 availableModels = available,
-                selectedModelLimits = limitsForModelId(selectedModelId)
+                selectedModelId = effectiveSelectedModel?.id,
+                selectedModelLimits = limitsForModelId(effectiveSelectedModel?.id)
             )
         }
     }
@@ -522,6 +526,12 @@ class ChatViewModel(
             latestModels.firstOrNull { it.id == selected || selected in it.aliases }
         }
         return XaiModelLimits.forModel(model) ?: XaiModelLimits.forModel(modelId)
+    }
+
+    private fun String.isTextChatModelId(models: List<AiModel>): Boolean {
+        val model = models.firstOrNull { it.id == this || this in it.aliases }
+            ?: AiModel(id = this, name = this, isEnabledForChat = true)
+        return model.isTextChatModel()
     }
 
     companion object {

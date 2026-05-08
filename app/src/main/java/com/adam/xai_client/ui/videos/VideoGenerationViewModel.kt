@@ -1,4 +1,4 @@
-package com.adam.xai_client.ui.images
+package com.adam.xai_client.ui.videos
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -7,14 +7,13 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.adam.xai_client.AppContainer
-import com.adam.xai_client.data.repository.ImageRepository
+import com.adam.xai_client.data.repository.VideoRepository
 import com.adam.xai_client.domain.model.AiModel
-import com.adam.xai_client.domain.model.GeneratedImage
-import com.adam.xai_client.domain.model.ImageChat
-import com.adam.xai_client.domain.model.ImageChatMessage
-import com.adam.xai_client.domain.model.ImageGenerationOptions
 import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.ModelLimits
+import com.adam.xai_client.domain.model.VideoChat
+import com.adam.xai_client.domain.model.VideoChatMessage
+import com.adam.xai_client.domain.model.VideoGenerationOptions
 import com.adam.xai_client.domain.model.XaiModelLimits
 import com.adam.xai_client.ui.components.toUserMessage
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,43 +26,46 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class ImageGenerationUiState(
+data class VideoGenerationUiState(
     val prompt: String = "",
     val sourceImageUrl: String = "",
-    val aspectRatio: String = "auto",
-    val resolution: String = "1k",
-    val chats: List<ImageChat> = emptyList(),
+    val durationSeconds: Int = 5,
+    val aspectRatio: String = "16:9",
+    val resolution: String = "480p",
+    val chats: List<VideoChat> = emptyList(),
     val selectedChatId: Long? = null,
     val isNewChatMode: Boolean = false,
-    val messages: List<ImageChatMessage> = emptyList(),
-    val imageModels: List<AiModel> = emptyList(),
+    val messages: List<VideoChatMessage> = emptyList(),
+    val videoModels: List<AiModel> = emptyList(),
     val selectedModelId: String? = null,
     val selectedModelLimits: ModelLimits? = null,
     val isModelInfoOpen: Boolean = false,
-    val isImageSettingsOpen: Boolean = false,
-    val editingMessageId: Long? = null,
+    val isVideoSettingsOpen: Boolean = false,
     val savedUri: Uri? = null,
     val isGenerating: Boolean = false,
+    val generationProgress: Int? = null,
+    val generationStatus: String? = null,
+    val generationRequestId: String? = null,
     val isSavingMessageId: Long? = null,
     val error: String? = null,
     val message: String? = null
 )
 
-class ImageGenerationViewModel(
-    private val imageRepository: ImageRepository
+class VideoGenerationViewModel(
+    private val videoRepository: VideoRepository
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(ImageGenerationUiState())
-    val uiState: StateFlow<ImageGenerationUiState> = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow(VideoGenerationUiState())
+    val uiState: StateFlow<VideoGenerationUiState> = _uiState.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val selectedChatMessages = uiState
         .map { it.selectedChatId }
         .distinctUntilChanged()
-        .flatMapLatest { chatId -> imageRepository.observeMessages(chatId) }
+        .flatMapLatest { chatId -> videoRepository.observeMessages(chatId) }
 
     init {
         viewModelScope.launch {
-            imageRepository.imageChats.collect { chats ->
+            videoRepository.videoChats.collect { chats ->
                 _uiState.update { state ->
                     val selectedChatId = state.selectedChatId
                         ?.takeIf { chatId -> chats.any { it.id == chatId } }
@@ -72,7 +74,7 @@ class ImageGenerationViewModel(
             }
         }
         viewModelScope.launch {
-            imageRepository.imageModels.collect { models ->
+            videoRepository.videoModels.collect { models ->
                 _uiState.update { state ->
                     val selectedModelId = state.selectedModelId
                         ?.takeIf { modelId -> models.any { it.id == modelId } }
@@ -80,7 +82,7 @@ class ImageGenerationViewModel(
                             ?.takeIf { modelId -> models.any { it.id == modelId } }
                         ?: models.firstOrNull()?.id
                     state.copy(
-                        imageModels = models,
+                        videoModels = models,
                         selectedModelId = selectedModelId,
                         selectedModelLimits = limitsForModelId(selectedModelId, models)
                     )
@@ -102,6 +104,10 @@ class ImageGenerationViewModel(
         _uiState.update { it.copy(sourceImageUrl = value, error = null, message = null) }
     }
 
+    fun onDurationChange(value: Int) {
+        _uiState.update { it.copy(durationSeconds = value.coerceIn(1, 15), error = null, message = null) }
+    }
+
     fun onAspectRatioChange(value: String) {
         _uiState.update { it.copy(aspectRatio = value, error = null, message = null) }
     }
@@ -114,14 +120,14 @@ class ImageGenerationViewModel(
         _uiState.update {
             it.copy(
                 selectedModelId = modelId,
-                selectedModelLimits = limitsForModelId(modelId, it.imageModels),
+                selectedModelLimits = limitsForModelId(modelId, it.videoModels),
                 error = null,
                 message = null
             )
         }
         viewModelScope.launch {
             _uiState.value.selectedChatId?.let { chatId ->
-                imageRepository.updateChatSelection(
+                videoRepository.updateChatSelection(
                     chatId = chatId,
                     selectedModelId = modelId
                 )
@@ -134,13 +140,13 @@ class ImageGenerationViewModel(
             val chatModelId = it.chats
                 .firstOrNull { chat -> chat.id == chatId }
                 ?.selectedModelId
-                ?.takeIf { modelId -> it.imageModels.any { model -> model.id == modelId } }
+                ?.takeIf { modelId -> it.videoModels.any { model -> model.id == modelId } }
+            val selectedModelId = chatModelId ?: it.selectedModelId
             it.copy(
                 selectedChatId = chatId,
                 isNewChatMode = chatId == null,
-                selectedModelId = chatModelId ?: it.selectedModelId,
-                selectedModelLimits = limitsForModelId(chatModelId ?: it.selectedModelId, it.imageModels),
-                editingMessageId = null,
+                selectedModelId = selectedModelId,
+                selectedModelLimits = limitsForModelId(selectedModelId, it.videoModels),
                 sourceImageUrl = "",
                 error = null,
                 message = null
@@ -156,7 +162,6 @@ class ImageGenerationViewModel(
                 messages = emptyList(),
                 prompt = "",
                 sourceImageUrl = "",
-                editingMessageId = null,
                 error = null,
                 message = null
             )
@@ -171,8 +176,8 @@ class ImageGenerationViewModel(
                 messages = emptyList(),
                 prompt = "",
                 sourceImageUrl = "",
-                editingMessageId = null,
-                isImageSettingsOpen = false,
+                isVideoSettingsOpen = false,
+                isModelInfoOpen = false,
                 error = null,
                 message = null
             )
@@ -181,7 +186,7 @@ class ImageGenerationViewModel(
 
     fun deleteChat(chatId: Long) {
         viewModelScope.launch {
-            runCatching { imageRepository.deleteChat(chatId) }
+            runCatching { videoRepository.deleteChat(chatId) }
                 .onSuccess {
                     _uiState.update { state ->
                         if (state.selectedChatId == chatId) {
@@ -189,7 +194,6 @@ class ImageGenerationViewModel(
                                 selectedChatId = null,
                                 isNewChatMode = false,
                                 messages = emptyList(),
-                                editingMessageId = null,
                                 sourceImageUrl = "",
                                 error = null,
                                 message = null
@@ -208,41 +212,21 @@ class ImageGenerationViewModel(
     fun deleteMessage(messageId: Long) {
         viewModelScope.launch {
             if (_uiState.value.isGenerating) return@launch
-            runCatching {
-                imageRepository.deleteMessage(messageId)
-                if (_uiState.value.editingMessageId == messageId) {
-                    _uiState.update { it.copy(editingMessageId = null, sourceImageUrl = "") }
+            runCatching { videoRepository.deleteMessage(messageId) }
+                .onFailure { throwable ->
+                    _uiState.update { it.copy(error = throwable.toUserMessage()) }
                 }
-            }.onFailure { throwable ->
-                _uiState.update { it.copy(error = throwable.toUserMessage()) }
-            }
         }
     }
 
     fun updateUserMessageText(messageId: Long, content: String) {
         viewModelScope.launch {
             if (_uiState.value.isGenerating) return@launch
-            runCatching {
-                imageRepository.updateUserMessageText(messageId, content)
-            }.onFailure { throwable ->
-                _uiState.update { it.copy(error = throwable.toUserMessage()) }
-            }
+            runCatching { videoRepository.updateUserMessageText(messageId, content) }
+                .onFailure { throwable ->
+                    _uiState.update { it.copy(error = throwable.toUserMessage()) }
+                }
         }
-    }
-
-    fun editFromMessage(messageId: Long) {
-        _uiState.update {
-            it.copy(
-                editingMessageId = messageId,
-                sourceImageUrl = "",
-                error = null,
-                message = "Следующий запрос будет редактировать выбранную картинку."
-            )
-        }
-    }
-
-    fun clearEditSource() {
-        _uiState.update { it.copy(editingMessageId = null, message = null, error = null) }
     }
 
     fun generate() {
@@ -250,56 +234,49 @@ class ImageGenerationViewModel(
             val state = _uiState.value
             val prompt = state.prompt.trim()
             if (prompt.isBlank()) {
-                _uiState.update { it.copy(error = "Введите описание изображения.") }
+                _uiState.update { it.copy(error = "Введите описание видео.") }
                 return@launch
             }
             val modelId = state.selectedModelId
             if (modelId.isNullOrBlank()) {
                 _uiState.update {
-                    it.copy(error = "Включите image/imagine модель на странице моделей и выберите ее здесь.")
+                    it.copy(error = "Включите video/imagine модель на странице моделей и выберите ее здесь.")
                 }
                 return@launch
             }
 
             _uiState.update {
-                it.copy(isGenerating = true, savedUri = null, error = null, message = null)
+                it.copy(
+                    isGenerating = true,
+                    savedUri = null,
+                    generationProgress = 0,
+                    generationStatus = "pending",
+                    generationRequestId = null,
+                    error = null,
+                    message = null
+                )
             }
 
             runCatching {
-                val chatId = state.selectedChatId ?: imageRepository.createChat(
-                    title = prompt.toImageChatTitle(),
+                val chatId = state.selectedChatId ?: videoRepository.createChat(
+                    title = prompt.toVideoChatTitle(),
                     selectedModelId = modelId
                 )
-                val parentMessageId = imageRepository.getVisibleTailMessageId(chatId)
-                val sourceDataUrl = state.editingMessageId?.let { messageId ->
-                    state.messages.firstOrNull { it.id == messageId }?.generatedImage
-                        ?.let { imageRepository.imageAsDataUrl(it) }
-                }
-                val userMessageId = imageRepository.addUserMessage(
+                val parentMessageId = videoRepository.getVisibleTailMessageId(chatId)
+                val sourceImageUrl = state.sourceImageUrl.trim().ifBlank { null }
+                val userMessageId = videoRepository.addUserMessage(
                     chatId = chatId,
                     content = prompt,
+                    sourceImageUrl = sourceImageUrl,
                     parentMessageId = parentMessageId
                 )
-                val image = imageRepository.generateImage(
-                    ImageGenerationOptions(
-                        modelId = modelId,
-                        prompt = prompt,
-                        aspectRatio = state.aspectRatio.takeUnless { it == "auto" },
-                        resolution = state.resolution,
-                        sourceImageUrl = sourceDataUrl ?: state.sourceImageUrl.trim().ifBlank { null }
-                    )
-                )
-                imageRepository.addAssistantImageMessage(
+                generateAssistantVideo(
                     chatId = chatId,
-                    content = prompt,
-                    image = image,
-                    sourceMessageId = state.editingMessageId,
-                    parentMessageId = userMessageId
-                )
-                imageRepository.updateChatAfterGeneration(
-                    chatId = chatId,
-                    title = prompt.toImageChatTitle(),
-                    selectedModelId = modelId
+                    prompt = prompt,
+                    modelId = modelId,
+                    sourceImageUrl = sourceImageUrl,
+                    parentMessageId = userMessageId,
+                    state = state
                 )
                 chatId
             }.onSuccess { chatId ->
@@ -309,8 +286,10 @@ class ImageGenerationViewModel(
                         isNewChatMode = false,
                         prompt = "",
                         sourceImageUrl = "",
-                        editingMessageId = null,
                         isGenerating = false,
+                        generationProgress = null,
+                        generationStatus = null,
+                        generationRequestId = null,
                         message = null,
                         error = null
                     )
@@ -319,70 +298,11 @@ class ImageGenerationViewModel(
                 _uiState.update {
                     it.copy(
                         isGenerating = false,
+                        generationProgress = null,
+                        generationStatus = null,
                         error = throwable.toUserMessage()
                     )
                 }
-            }
-        }
-    }
-
-    fun regenerateLastResponse() {
-        val messageId = _uiState.value.messages
-            .lastOrNull { it.role == MessageRole.ASSISTANT }
-            ?.id
-            ?: return
-        regenerateResponse(messageId)
-    }
-
-    fun regenerateResponse(messageId: Long) {
-        viewModelScope.launch {
-            val state = _uiState.value
-            val chatId = state.selectedChatId ?: return@launch
-            if (state.isGenerating) return@launch
-            val assistant = state.messages.firstOrNull {
-                it.id == messageId && it.role == MessageRole.ASSISTANT
-            }
-                ?: return@launch
-            val parentMessageId = assistant.parentMessageId ?: return@launch
-            val prompt = assistant.content.trim()
-            if (prompt.isBlank()) return@launch
-            val modelId = state.selectedModelId
-            if (modelId.isNullOrBlank()) {
-                _uiState.update { it.copy(error = "Select an image model first.") }
-                return@launch
-            }
-
-            _uiState.update { it.copy(isGenerating = true, savedUri = null, error = null, message = null) }
-            runCatching {
-                val sourceDataUrl = assistant.sourceMessageId?.let { sourceId ->
-                    state.messages.firstOrNull { it.id == sourceId }?.generatedImage
-                        ?.let { imageRepository.imageAsDataUrl(it) }
-                }
-                val image = imageRepository.generateImage(
-                    ImageGenerationOptions(
-                        modelId = modelId,
-                        prompt = prompt,
-                        aspectRatio = state.aspectRatio.takeUnless { it == "auto" },
-                        resolution = state.resolution,
-                        sourceImageUrl = sourceDataUrl
-                    )
-                )
-                imageRepository.addAssistantImageMessage(
-                    chatId = chatId,
-                    content = prompt,
-                    image = image,
-                    sourceMessageId = assistant.sourceMessageId,
-                    parentMessageId = parentMessageId
-                )
-                imageRepository.updateChatAfterGeneration(
-                    chatId = chatId,
-                    title = prompt.toImageChatTitle(),
-                    selectedModelId = modelId
-                )
-            }.onSuccess {
-                _uiState.update { it.copy(isGenerating = false, error = null, message = null) }
-            }.onFailure { throwable ->
-                _uiState.update { it.copy(isGenerating = false, error = throwable.toUserMessage()) }
             }
         }
     }
@@ -395,40 +315,115 @@ class ImageGenerationViewModel(
             val userMessage = state.messages.firstOrNull {
                 it.id == messageId && it.role == MessageRole.USER
             } ?: return@launch
-            val prompt = userMessage.content.trim()
-            if (prompt.isBlank()) return@launch
             val modelId = state.selectedModelId
             if (modelId.isNullOrBlank()) {
-                _uiState.update { it.copy(error = "Select an image model first.") }
+                _uiState.update { it.copy(error = "Выберите video модель.") }
                 return@launch
             }
+            val prompt = userMessage.content.trim()
+            if (prompt.isBlank()) return@launch
 
-            _uiState.update { it.copy(isGenerating = true, savedUri = null, error = null, message = null) }
+            _uiState.update {
+                it.copy(
+                    isGenerating = true,
+                    savedUri = null,
+                    generationProgress = 0,
+                    generationStatus = "pending",
+                    generationRequestId = null,
+                    error = null,
+                    message = null
+                )
+            }
             runCatching {
-                val image = imageRepository.generateImage(
-                    ImageGenerationOptions(
-                        modelId = modelId,
-                        prompt = prompt,
-                        aspectRatio = state.aspectRatio.takeUnless { it == "auto" },
-                        resolution = state.resolution
-                    )
-                )
-                imageRepository.addAssistantImageMessage(
+                generateAssistantVideo(
                     chatId = chatId,
-                    content = prompt,
-                    image = image,
-                    sourceMessageId = null,
-                    parentMessageId = userMessage.id
-                )
-                imageRepository.updateChatAfterGeneration(
-                    chatId = chatId,
-                    title = prompt.toImageChatTitle(),
-                    selectedModelId = modelId
+                    prompt = prompt,
+                    modelId = modelId,
+                    sourceImageUrl = userMessage.sourceImageUrl,
+                    parentMessageId = userMessage.id,
+                    state = state
                 )
             }.onSuccess {
-                _uiState.update { it.copy(isGenerating = false, error = null, message = null) }
+                _uiState.update {
+                    it.copy(
+                        isGenerating = false,
+                        generationProgress = null,
+                        generationStatus = null,
+                        generationRequestId = null,
+                        error = null,
+                        message = null
+                    )
+                }
             }.onFailure { throwable ->
-                _uiState.update { it.copy(isGenerating = false, error = throwable.toUserMessage()) }
+                _uiState.update {
+                    it.copy(
+                        isGenerating = false,
+                        generationProgress = null,
+                        generationStatus = null,
+                        error = throwable.toUserMessage()
+                    )
+                }
+            }
+        }
+    }
+
+    fun regenerateResponse(messageId: Long) {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val chatId = state.selectedChatId ?: return@launch
+            if (state.isGenerating) return@launch
+            val assistant = state.messages.firstOrNull {
+                it.id == messageId && it.role == MessageRole.ASSISTANT
+            } ?: return@launch
+            val parentMessageId = assistant.parentMessageId ?: return@launch
+            val modelId = state.selectedModelId
+            if (modelId.isNullOrBlank()) {
+                _uiState.update { it.copy(error = "Выберите video модель.") }
+                return@launch
+            }
+            val prompt = assistant.content.trim()
+            if (prompt.isBlank()) return@launch
+
+            _uiState.update {
+                it.copy(
+                    isGenerating = true,
+                    savedUri = null,
+                    generationProgress = 0,
+                    generationStatus = "pending",
+                    generationRequestId = null,
+                    error = null,
+                    message = null
+                )
+            }
+            runCatching {
+                generateAssistantVideo(
+                    chatId = chatId,
+                    prompt = prompt,
+                    modelId = modelId,
+                    sourceImageUrl = assistant.sourceImageUrl,
+                    parentMessageId = parentMessageId,
+                    state = state
+                )
+            }.onSuccess {
+                _uiState.update {
+                    it.copy(
+                        isGenerating = false,
+                        generationProgress = null,
+                        generationStatus = null,
+                        generationRequestId = null,
+                        error = null,
+                        message = null
+                    )
+                }
+            }.onFailure { throwable ->
+                _uiState.update {
+                    it.copy(
+                        isGenerating = false,
+                        generationProgress = null,
+                        generationStatus = null,
+                        error = throwable.toUserMessage()
+                    )
+                }
             }
         }
     }
@@ -436,28 +431,27 @@ class ImageGenerationViewModel(
     fun switchMessageVersion(messageId: Long, direction: Int) {
         viewModelScope.launch {
             if (_uiState.value.isGenerating) return@launch
-            runCatching {
-                imageRepository.switchToSiblingVersion(messageId, direction)
-            }.onFailure { throwable ->
-                _uiState.update { it.copy(error = throwable.toUserMessage()) }
-            }
+            runCatching { videoRepository.switchToSiblingVersion(messageId, direction) }
+                .onFailure { throwable ->
+                    _uiState.update { it.copy(error = throwable.toUserMessage()) }
+                }
         }
     }
 
     fun save(messageId: Long) {
         viewModelScope.launch {
-            val image = _uiState.value.messages
+            val video = _uiState.value.messages
                 .firstOrNull { it.id == messageId }
-                ?.generatedImage
+                ?.generatedVideo
                 ?: return@launch
             _uiState.update { it.copy(isSavingMessageId = messageId, error = null, message = null) }
-            runCatching { imageRepository.saveImage(image) }
+            runCatching { videoRepository.saveVideo(video) }
                 .onSuccess { uri ->
                     _uiState.update {
                         it.copy(
                             isSavingMessageId = null,
                             savedUri = uri,
-                            message = "Изображение сохранено в Pictures/xAI Chat.",
+                            message = "Видео сохранено в Movies/xAI Chat.",
                             error = null
                         )
                     }
@@ -474,8 +468,8 @@ class ImageGenerationViewModel(
         _uiState.update { it.copy(error = null, message = null) }
     }
 
-    fun setImageSettingsOpen(isOpen: Boolean) {
-        _uiState.update { it.copy(isImageSettingsOpen = isOpen) }
+    fun setVideoSettingsOpen(isOpen: Boolean) {
+        _uiState.update { it.copy(isVideoSettingsOpen = isOpen) }
     }
 
     fun setModelInfoOpen(isOpen: Boolean) {
@@ -483,13 +477,57 @@ class ImageGenerationViewModel(
     }
 
     fun onStoragePermissionDenied() {
-        _uiState.update { it.copy(error = "Нужно разрешение на запись, чтобы сохранить изображение в Pictures.") }
+        _uiState.update { it.copy(error = "Нужно разрешение на запись, чтобы сохранить видео в Movies.") }
+    }
+
+    private suspend fun generateAssistantVideo(
+        chatId: Long,
+        prompt: String,
+        modelId: String,
+        sourceImageUrl: String?,
+        parentMessageId: Long,
+        state: VideoGenerationUiState
+    ) {
+        val (video, requestId) = videoRepository.generateVideo(
+            options = VideoGenerationOptions(
+                modelId = modelId,
+                prompt = prompt,
+                durationSeconds = state.durationSeconds,
+                aspectRatio = state.aspectRatio,
+                resolution = state.resolution,
+                sourceImageUrl = sourceImageUrl
+            ),
+            onProgress = { progress ->
+                _uiState.update {
+                    it.copy(
+                        generationProgress = progress.progress,
+                        generationStatus = progress.status,
+                        generationRequestId = progress.requestId
+                    )
+                }
+            }
+        )
+        videoRepository.addAssistantVideoMessage(
+            chatId = chatId,
+            content = prompt,
+            video = video,
+            requestId = requestId,
+            sourceImageUrl = sourceImageUrl,
+            aspectRatio = state.aspectRatio,
+            resolution = state.resolution,
+            parentMessageId = parentMessageId
+        )
+        videoRepository.updateChatAfterGeneration(
+            chatId = chatId,
+            title = prompt.toVideoChatTitle(),
+            selectedModelId = modelId
+        )
     }
 
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                ImageGenerationViewModel(imageRepository = container.imageRepository)
+                VideoGenerationViewModel(videoRepository = container.videoRepository)
             }
         }
     }
@@ -502,9 +540,9 @@ private fun limitsForModelId(modelId: String?, models: List<AiModel>): ModelLimi
     return XaiModelLimits.forModel(model) ?: XaiModelLimits.forModel(modelId)
 }
 
-private fun String.toImageChatTitle(): String {
+private fun String.toVideoChatTitle(): String {
     return trim()
         .replace(Regex("\\s+"), " ")
         .take(48)
-        .ifBlank { "Новый image-чат" }
+        .ifBlank { "Новый video-чат" }
 }

@@ -12,6 +12,8 @@ import com.adam.xai_client.data.local.dao.ImageChatDao
 import com.adam.xai_client.data.local.dao.ImageMessageDao
 import com.adam.xai_client.data.local.dao.MessageDao
 import com.adam.xai_client.data.local.dao.ModelRoleDao
+import com.adam.xai_client.data.local.dao.VideoChatDao
+import com.adam.xai_client.data.local.dao.VideoMessageDao
 import com.adam.xai_client.data.local.entity.AiModelEntity
 import com.adam.xai_client.data.local.entity.ChatModelSettingsEntity
 import com.adam.xai_client.data.local.entity.ChatEntity
@@ -19,6 +21,8 @@ import com.adam.xai_client.data.local.entity.ImageChatEntity
 import com.adam.xai_client.data.local.entity.ImageMessageEntity
 import com.adam.xai_client.data.local.entity.MessageEntity
 import com.adam.xai_client.data.local.entity.ModelRoleEntity
+import com.adam.xai_client.data.local.entity.VideoChatEntity
+import com.adam.xai_client.data.local.entity.VideoMessageEntity
 
 @Database(
     entities = [
@@ -28,9 +32,11 @@ import com.adam.xai_client.data.local.entity.ModelRoleEntity
         ModelRoleEntity::class,
         ChatModelSettingsEntity::class,
         ImageChatEntity::class,
-        ImageMessageEntity::class
+        ImageMessageEntity::class,
+        VideoChatEntity::class,
+        VideoMessageEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -42,6 +48,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun chatModelSettingsDao(): ChatModelSettingsDao
     abstract fun imageChatDao(): ImageChatDao
     abstract fun imageMessageDao(): ImageMessageDao
+    abstract fun videoChatDao(): VideoChatDao
+    abstract fun videoMessageDao(): VideoMessageDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -156,6 +164,46 @@ abstract class AppDatabase : RoomDatabase() {
                 if (!db.hasColumn("ai_models", "imagePrice")) {
                     db.execSQL("ALTER TABLE ai_models ADD COLUMN imagePrice INTEGER")
                 }
+            }
+        }
+
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS video_chats (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        selectedModelId TEXT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS video_messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        chatId INTEGER NOT NULL,
+                        role TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        sourceImageUrl TEXT,
+                        videoFilePath TEXT,
+                        videoMimeType TEXT,
+                        videoDurationSeconds INTEGER,
+                        videoRespectModeration INTEGER,
+                        requestId TEXT,
+                        aspectRatio TEXT,
+                        resolution TEXT,
+                        parentMessageId INTEGER,
+                        activeChildMessageId INTEGER,
+                        createdAt INTEGER NOT NULL,
+                        FOREIGN KEY(chatId) REFERENCES video_chats(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_video_messages_chatId ON video_messages(chatId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_video_messages_parentMessageId ON video_messages(parentMessageId)")
             }
         }
 

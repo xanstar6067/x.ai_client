@@ -7,6 +7,8 @@ import com.adam.xai_client.data.local.entity.ImageChatEntity
 import com.adam.xai_client.data.local.entity.ImageMessageEntity
 import com.adam.xai_client.data.local.entity.MessageEntity
 import com.adam.xai_client.data.local.entity.ModelRoleEntity
+import com.adam.xai_client.data.local.entity.VideoChatEntity
+import com.adam.xai_client.data.local.entity.VideoMessageEntity
 import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.Chat
@@ -14,6 +16,8 @@ import com.adam.xai_client.domain.model.ImageChat
 import com.adam.xai_client.domain.model.ImageChatMessage
 import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.ModelRole
+import com.adam.xai_client.domain.model.VideoChat
+import com.adam.xai_client.domain.model.VideoChatMessage
 
 internal fun ChatEntity.asDomain(): Chat = Chat(
     id = id,
@@ -52,6 +56,32 @@ internal fun ImageMessageEntity.asDomain(): ImageChatMessage = ImageChatMessage(
     imageBytes = imageBytes,
     imageMimeType = imageMimeType,
     sourceMessageId = sourceMessageId,
+    parentMessageId = parentMessageId,
+    activeChildMessageId = activeChildMessageId,
+    createdAt = createdAt
+)
+
+internal fun VideoChatEntity.asDomain(): VideoChat = VideoChat(
+    id = id,
+    title = title,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+    selectedModelId = selectedModelId
+)
+
+internal fun VideoMessageEntity.asDomain(): VideoChatMessage = VideoChatMessage(
+    id = id,
+    chatId = chatId,
+    role = role,
+    content = content,
+    sourceImageUrl = sourceImageUrl,
+    videoFilePath = videoFilePath,
+    videoMimeType = videoMimeType,
+    videoDurationSeconds = videoDurationSeconds,
+    videoRespectModeration = videoRespectModeration,
+    requestId = requestId,
+    aspectRatio = aspectRatio,
+    resolution = resolution,
     parentMessageId = parentMessageId,
     activeChildMessageId = activeChildMessageId,
     createdAt = createdAt

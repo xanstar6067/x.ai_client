@@ -20,6 +20,11 @@ data class ImageGenerationModelsResponseDto(
 )
 
 @Serializable
+data class VideoGenerationModelsResponseDto(
+    val models: List<ModelDto> = emptyList()
+)
+
+@Serializable
 data class ModelDto(
     val id: String,
     val aliases: List<String> = emptyList(),

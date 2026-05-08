@@ -15,6 +15,9 @@ data class ModelLimits(
 object XaiModelLimits {
     private const val XAI_MODELS_URL = "https://docs.x.ai/developers/models"
     private const val XAI_LIMITS_URL = "https://docs.x.ai/developers/rate-limits"
+    private const val XAI_IMAGE_MODEL_URL = "https://docs.x.ai/developers/models/grok-imagine-image"
+    private const val XAI_IMAGE_QUALITY_MODEL_URL = "https://docs.x.ai/developers/models/grok-imagine-image-quality"
+    private const val XAI_VIDEO_MODEL_URL = "https://docs.x.ai/developers/models/grok-imagine-video"
 
     private val grok3 = ModelLimits(
         contextWindowTokens = 131_072,
@@ -67,9 +70,57 @@ object XaiModelLimits {
         )
     )
 
+    private val grokImagineImage = ModelLimits(
+        contextWindowTokens = null,
+        publicRateLimit = "300 rpm in the public xAI model page; team limits may differ in xAI Console",
+        inputPricePerMillion = "not token-priced",
+        outputPricePerMillion = "not token-priced",
+        imagePrice = "$0.02",
+        sourceLabel = "xAI Grok Imagine Image model page",
+        sourceUrl = XAI_IMAGE_MODEL_URL,
+        notes = listOf(
+            "Image generation is billed per generated image.",
+            "1K and 2K output are listed at $0.02 per image for grok-imagine-image.",
+            "Generated URLs are temporary, so the app downloads generated images before storing them."
+        )
+    )
+
+    private val grokImagineImageQuality = grokImagineImage.copy(
+        publicRateLimit = "300 rpm in the public xAI model page; team limits may differ in xAI Console",
+        imagePrice = "$0.04-$0.05",
+        sourceLabel = "xAI Grok Imagine Image Quality model page",
+        sourceUrl = XAI_IMAGE_QUALITY_MODEL_URL,
+        notes = listOf(
+            "Image generation is billed per generated image.",
+            "The public model page lists 1K output at $0.04 and 2K output at $0.05.",
+            "Generated URLs are temporary, so the app downloads generated images before storing them."
+        )
+    )
+
+    private val grokImagineVideo = ModelLimits(
+        contextWindowTokens = null,
+        publicRateLimit = "70 rpm in the public xAI model page; team limits may differ in xAI Console",
+        inputPricePerMillion = "not token-priced",
+        outputPricePerMillion = "$0.05/sec at 480p, $0.07/sec at 720p",
+        sourceLabel = "xAI Grok Imagine Video model page",
+        sourceUrl = XAI_VIDEO_MODEL_URL,
+        notes = listOf(
+            "Video generation is asynchronous: start a request, poll by request_id, then download the temporary MP4 URL.",
+            "The public docs list a 1-15 second duration range for generation.",
+            "Supported generation resolutions are 480p and 720p."
+        )
+    )
+
     fun forModel(modelId: String?): ModelLimits? {
         val normalized = modelId.orEmpty().lowercase()
         return when {
+            normalized.startsWith("grok-imagine-video") -> grokImagineVideo
+            normalized.startsWith("grok-imagine-image-quality") -> grokImagineImageQuality
+            normalized.startsWith("grok-imagine-image-pro") -> grokImagineImageQuality.copy(
+                notes = grokImagineImageQuality.notes + "xAI announced grok-imagine-image-pro deprecation as of May 15, 2026; use grok-imagine-image-quality for new requests."
+            )
+            normalized.startsWith("grok-imagine-image") -> grokImagineImage
+            normalized.startsWith("grok-2-image") -> grokImagineImage
             normalized.startsWith("grok-4.20-multi-agent") -> grok420MultiAgent
             normalized.startsWith("grok-4.20") -> grok420
             normalized.startsWith("grok-3-mini") -> grok3Mini

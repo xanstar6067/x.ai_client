@@ -36,7 +36,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -63,6 +62,7 @@ import com.adam.xai_client.domain.model.ReasoningEffort
 import com.adam.xai_client.domain.model.XaiModelLimits
 import com.adam.xai_client.ui.components.DropdownSelector
 import com.adam.xai_client.ui.components.MessageBubble
+import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
 import kotlin.math.roundToInt
 
@@ -121,7 +121,7 @@ fun ChatScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { SafeSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {

@@ -2,6 +2,8 @@ package com.adam.xai_client.data.remote.client
 
 import com.adam.xai_client.data.remote.api.XaiApiClient
 import com.adam.xai_client.data.remote.api.ChatStreamDelta
+import com.adam.xai_client.data.remote.api.DownloadedVideo
+import com.adam.xai_client.data.remote.api.RemoteGeneratedVideo
 import com.adam.xai_client.data.remote.dto.ApiChatMessage
 import com.adam.xai_client.data.remote.dto.ChatCompletionResponseDto
 import com.adam.xai_client.data.remote.dto.ImageEditRequestDto
@@ -13,6 +15,11 @@ import com.adam.xai_client.data.remote.dto.LanguageModelsResponseDto
 import com.adam.xai_client.data.remote.dto.ModelsResponseDto
 import com.adam.xai_client.data.remote.dto.ResponsesResponseDto
 import com.adam.xai_client.data.remote.dto.ResponsesStreamEventDto
+import com.adam.xai_client.data.remote.dto.VideoGenerationRequestDto
+import com.adam.xai_client.data.remote.dto.VideoGenerationStartResponseDto
+import com.adam.xai_client.data.remote.dto.VideoGenerationStatusResponseDto
+import com.adam.xai_client.data.remote.dto.VideoGenerationModelsResponseDto
+import com.adam.xai_client.data.remote.dto.VideoReferenceDto
 import com.adam.xai_client.data.remote.dto.asDomain
 import com.adam.xai_client.data.remote.dto.chatCompletionRequestDto
 import com.adam.xai_client.data.remote.dto.outputTextContent
@@ -21,6 +28,8 @@ import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.GeneratedImage
 import com.adam.xai_client.domain.model.ImageGenerationOptions
+import com.adam.xai_client.domain.model.VideoGenerationOptions
+import com.adam.xai_client.domain.model.VideoGenerationProgress
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -42,6 +51,7 @@ import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.utils.io.readUTF8Line
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.JsonElement
@@ -50,6 +60,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.Base64
+import kotlin.time.Duration.Companion.minutes
 
 class KtorXaiApiClient(
     private val httpClient: HttpClient = HttpClient(OkHttp) {
@@ -103,7 +114,19 @@ class KtorXaiApiClient(
             emptyList()
         }
 
-        return (textModels + imageModels).mergeModelsById()
+        val videoModels = try {
+            val response = httpClient.get(endpoint(baseUrl, "/video-generation-models")) {
+                bearerAuth(apiKey)
+            }
+            response.ensureSuccess()
+            response.body<VideoGenerationModelsResponseDto>().models.map { it.asDomain() }
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+        return (textModels + imageModels + videoModels).mergeModelsById()
     }
 
     override suspend fun sendChatRequest(
@@ -212,6 +235,87 @@ class KtorXaiApiClient(
         val imageUrl = imageData.url
             ?: throw XaiApiException(200, "Image API did not return image data.")
         return downloadGeneratedImage(imageUrl)
+    }
+
+    override suspend fun generateVideo(
+        apiKey: String,
+        baseUrl: String,
+        options: VideoGenerationOptions,
+        onProgress: (VideoGenerationProgress) -> Unit
+    ): RemoteGeneratedVideo {
+        val sourceImageUrl = options.sourceImageUrl?.trim().orEmpty()
+        val response = httpClient.post(endpoint(baseUrl, "/videos/generations")) {
+            bearerAuth(apiKey)
+            contentType(ContentType.Application.Json)
+            setBody(
+                VideoGenerationRequestDto(
+                    model = options.modelId,
+                    prompt = options.prompt,
+                    image = sourceImageUrl.takeIf { it.isNotBlank() }?.let { VideoReferenceDto(url = it) },
+                    duration = options.durationSeconds.coerceIn(1, 15),
+                    aspectRatio = options.aspectRatio,
+                    resolution = options.resolution
+                )
+            )
+        }
+        response.ensureSuccess()
+        val requestId = response.body<VideoGenerationStartResponseDto>().requestId
+        onProgress(VideoGenerationProgress(requestId = requestId, status = "pending", progress = 0))
+
+        val startedAt = System.currentTimeMillis()
+        while (true) {
+            delay(VIDEO_POLL_INTERVAL_MS)
+            val statusResponse = httpClient.get(endpoint(baseUrl, "/videos/$requestId")) {
+                bearerAuth(apiKey)
+            }
+            statusResponse.ensureSuccess()
+            val status = statusResponse.body<VideoGenerationStatusResponseDto>()
+            onProgress(
+                VideoGenerationProgress(
+                    requestId = requestId,
+                    status = status.status,
+                    progress = status.progress
+                )
+            )
+            when (status.status.lowercase()) {
+                "done" -> {
+                    val video = status.video
+                    val url = video?.url
+                        ?: throw XaiApiException(200, "Video API did not return a video URL.")
+                    return RemoteGeneratedVideo(
+                        url = url,
+                        durationSeconds = video.duration,
+                        respectModeration = video.respectModeration,
+                        requestId = requestId
+                    )
+                }
+                "failed" -> {
+                    val message = status.error?.message
+                        ?: status.error?.code
+                        ?: "Video generation failed."
+                    throw XaiApiException(200, message)
+                }
+                "expired" -> throw XaiApiException(200, "Video generation request expired.")
+                else -> {
+                    if (System.currentTimeMillis() - startedAt > VIDEO_POLL_TIMEOUT_MS) {
+                        throw XaiApiException(200, "Video generation timed out. The request id is $requestId.")
+                    }
+                }
+            }
+        }
+    }
+
+    override suspend fun downloadGeneratedVideo(url: String): DownloadedVideo {
+        val response = httpClient.get(url)
+        response.ensureSuccess()
+        val mimeType = response.headers[HttpHeaders.ContentType]
+            ?.substringBefore(";")
+            ?.ifBlank { null }
+            ?: "video/mp4"
+        return DownloadedVideo(
+            bytes = response.body(),
+            mimeType = mimeType
+        )
     }
 
     private suspend fun downloadGeneratedImage(url: String): GeneratedImage {
@@ -450,6 +554,11 @@ class KtorXaiApiClient(
             else -> rawBody.ifBlank { "HTTP ${status.value}: ${status.description}" }
         }
         throw XaiApiException(status.value, readable)
+    }
+
+    private companion object {
+        const val VIDEO_POLL_INTERVAL_MS = 5_000L
+        val VIDEO_POLL_TIMEOUT_MS = 15.minutes.inWholeMilliseconds
     }
 }
 

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
@@ -27,7 +28,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.Chat
+import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
 import java.text.DateFormat
 import java.util.Date
@@ -57,6 +58,7 @@ fun ChatListScreen(
     onOpenModels: () -> Unit,
     onOpenRoles: () -> Unit,
     onOpenImages: () -> Unit,
+    onOpenVideos: () -> Unit,
     onOpenBackups: () -> Unit,
     onErrorShown: () -> Unit
 ) {
@@ -69,13 +71,16 @@ fun ChatListScreen(
     )
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { SafeSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("xAI Chat") },
                 actions = {
                     IconButton(onClick = onOpenImages) {
                         Icon(Icons.Default.Image, contentDescription = "Изображения")
+                    }
+                    IconButton(onClick = onOpenVideos) {
+                        Icon(Icons.Default.Movie, contentDescription = "Видео")
                     }
                     IconButton(onClick = onOpenModels) {
                         Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Модели")

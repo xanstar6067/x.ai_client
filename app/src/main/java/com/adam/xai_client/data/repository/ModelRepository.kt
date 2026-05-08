@@ -67,7 +67,8 @@ class ModelRepository(
         AiModel(id = "grok-4.20-non-reasoning", name = "grok-4.20-non-reasoning"),
         AiModel(id = "grok-imagine-image", name = "grok-imagine-image"),
         AiModel(id = "grok-imagine-image-quality", name = "grok-imagine-image-quality"),
-        AiModel(id = "grok-imagine-image-pro", name = "grok-imagine-image-pro")
+        AiModel(id = "grok-imagine-image-pro", name = "grok-imagine-image-pro"),
+        AiModel(id = "grok-imagine-video", name = "grok-imagine-video")
     )
 
     private fun AiModel.withFallbackMetadata(fallback: AiModel?): AiModel {

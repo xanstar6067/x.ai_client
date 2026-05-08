@@ -23,6 +23,8 @@ import com.adam.xai_client.ui.roles.RolesScreen
 import com.adam.xai_client.ui.roles.RolesViewModel
 import com.adam.xai_client.ui.settings.SettingsScreen
 import com.adam.xai_client.ui.settings.SettingsViewModel
+import com.adam.xai_client.ui.videos.VideoGenerationScreen
+import com.adam.xai_client.ui.videos.VideoGenerationViewModel
 
 @Composable
 fun XaiChatNavHost(container: AppContainer) {
@@ -46,6 +48,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 onOpenModels = { navController.navigate(Screen.Models.route) },
                 onOpenRoles = { navController.navigate(Screen.Roles.route) },
                 onOpenImages = { navController.navigate(Screen.Images.route) },
+                onOpenVideos = { navController.navigate(Screen.Videos.route) },
                 onOpenBackups = { navController.navigate(Screen.Backups.route) },
                 onErrorShown = viewModel::clearError
             )
@@ -183,12 +186,46 @@ fun XaiChatNavHost(container: AppContainer) {
                 onNewChat = viewModel::newChat,
                 onDeleteChat = viewModel::deleteChat,
                 onImageSettingsOpenChange = viewModel::setImageSettingsOpen,
+                onModelInfoOpenChange = viewModel::setModelInfoOpen,
                 onShowChatList = viewModel::showChatList,
                 onEditFromMessage = viewModel::editFromMessage,
                 onUpdateUserMessage = viewModel::updateUserMessageText,
                 onDeleteMessage = viewModel::deleteMessage,
                 onClearEditSource = viewModel::clearEditSource,
                 onGenerate = viewModel::generate,
+                onGenerateFromMessage = viewModel::generateFromUserMessage,
+                onRegenerate = viewModel::regenerateResponse,
+                onSwitchMessageVersion = viewModel::switchMessageVersion,
+                onSave = viewModel::save,
+                onStoragePermissionDenied = viewModel::onStoragePermissionDenied,
+                onBack = { navController.popBackStack() },
+                onMessageShown = viewModel::clearTransientMessages
+            )
+        }
+
+        composable(Screen.Videos.route) {
+            val viewModel: VideoGenerationViewModel = viewModel(
+                factory = VideoGenerationViewModel.factory(container)
+            )
+            val state = viewModel.uiState.collectAsStateWithLifecycle().value
+            VideoGenerationScreen(
+                state = state,
+                onPromptChange = viewModel::onPromptChange,
+                onSourceImageUrlChange = viewModel::onSourceImageUrlChange,
+                onDurationChange = viewModel::onDurationChange,
+                onAspectRatioChange = viewModel::onAspectRatioChange,
+                onResolutionChange = viewModel::onResolutionChange,
+                onModelSelected = viewModel::onModelSelected,
+                onChatSelected = viewModel::onChatSelected,
+                onNewChat = viewModel::newChat,
+                onDeleteChat = viewModel::deleteChat,
+                onVideoSettingsOpenChange = viewModel::setVideoSettingsOpen,
+                onModelInfoOpenChange = viewModel::setModelInfoOpen,
+                onShowChatList = viewModel::showChatList,
+                onUpdateUserMessage = viewModel::updateUserMessageText,
+                onDeleteMessage = viewModel::deleteMessage,
+                onGenerate = viewModel::generate,
+                onGenerateFromMessage = viewModel::generateFromUserMessage,
                 onRegenerate = viewModel::regenerateResponse,
                 onSwitchMessageVersion = viewModel::switchMessageVersion,
                 onSave = viewModel::save,
@@ -221,6 +258,7 @@ private sealed class Screen(val route: String) {
     data object Models : Screen("models")
     data object Roles : Screen("roles")
     data object Images : Screen("images")
+    data object Videos : Screen("videos")
     data object Backups : Screen("backups")
 
     data object Chat : Screen("chat/{chatId}") {

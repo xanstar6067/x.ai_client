@@ -17,6 +17,7 @@ import com.adam.xai_client.domain.model.ImageChat
 import com.adam.xai_client.domain.model.ImageChatMessage
 import com.adam.xai_client.domain.model.ImageGenerationOptions
 import com.adam.xai_client.domain.model.MessageRole
+import com.adam.xai_client.domain.model.isImageGenerationModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -340,11 +341,4 @@ class ImageRepository(
             )
         }
     }
-}
-
-private fun AiModel.isImageGenerationModel(): Boolean {
-    val normalizedId = id.lowercase()
-    val normalizedName = name.lowercase()
-    return normalizedId.startsWith("grok-imagine-image") ||
-        normalizedName.startsWith("grok-imagine-image")
 }
