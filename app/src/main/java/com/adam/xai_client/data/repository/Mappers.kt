@@ -5,6 +5,7 @@ import com.adam.xai_client.data.local.entity.ChatModelSettingsEntity
 import com.adam.xai_client.data.local.entity.ChatEntity
 import com.adam.xai_client.data.local.entity.ImageChatEntity
 import com.adam.xai_client.data.local.entity.ImageMessageEntity
+import com.adam.xai_client.data.local.entity.ImageMessageSummary
 import com.adam.xai_client.data.local.entity.MessageEntity
 import com.adam.xai_client.data.local.entity.ModelRoleEntity
 import com.adam.xai_client.data.local.entity.VideoChatEntity
@@ -54,7 +55,22 @@ internal fun ImageMessageEntity.asDomain(): ImageChatMessage = ImageChatMessage(
     role = role,
     content = content,
     imageBytes = imageBytes,
+    imageFilePath = imageFilePath,
     imageMimeType = imageMimeType,
+    sourceMessageId = sourceMessageId,
+    parentMessageId = parentMessageId,
+    activeChildMessageId = activeChildMessageId,
+    createdAt = createdAt
+)
+
+internal fun ImageMessageSummary.asDomain(): ImageChatMessage = ImageChatMessage(
+    id = id,
+    chatId = chatId,
+    role = role,
+    content = content,
+    imageFilePath = imageFilePath,
+    imageMimeType = imageMimeType,
+    hasImage = hasImage,
     sourceMessageId = sourceMessageId,
     parentMessageId = parentMessageId,
     activeChildMessageId = activeChildMessageId,

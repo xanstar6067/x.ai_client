@@ -36,7 +36,7 @@ import com.adam.xai_client.data.local.entity.VideoMessageEntity
         VideoChatEntity::class,
         VideoMessageEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -204,6 +204,12 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_video_messages_chatId ON video_messages(chatId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_video_messages_parentMessageId ON video_messages(parentMessageId)")
+            }
+        }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE image_messages ADD COLUMN imageFilePath TEXT")
             }
         }
 

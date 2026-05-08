@@ -14,7 +14,9 @@ data class ImageChatMessage(
     val role: MessageRole,
     val content: String,
     val imageBytes: ByteArray? = null,
+    val imageFilePath: String? = null,
     val imageMimeType: String? = null,
+    val hasImage: Boolean = imageBytes != null || imageFilePath != null,
     val sourceMessageId: Long? = null,
     val parentMessageId: Long? = null,
     val activeChildMessageId: Long? = null,
@@ -23,11 +25,14 @@ data class ImageChatMessage(
     val createdAt: Long
 ) {
     val generatedImage: GeneratedImage?
-        get() = imageBytes?.let { bytes ->
+        get() = if (imageBytes != null || imageFilePath != null) {
             GeneratedImage(
-                bytes = bytes,
-                mimeType = imageMimeType ?: "image/jpeg"
+                bytes = imageBytes,
+                mimeType = imageMimeType ?: "image/jpeg",
+                filePath = imageFilePath
             )
+        } else {
+            null
         }
 
     override fun equals(other: Any?): Boolean {
@@ -39,7 +44,9 @@ data class ImageChatMessage(
             role == other.role &&
             content == other.content &&
             imageBytes.contentEquals(other.imageBytes) &&
+            imageFilePath == other.imageFilePath &&
             imageMimeType == other.imageMimeType &&
+            hasImage == other.hasImage &&
             sourceMessageId == other.sourceMessageId &&
             parentMessageId == other.parentMessageId &&
             activeChildMessageId == other.activeChildMessageId &&
@@ -54,7 +61,9 @@ data class ImageChatMessage(
         result = 31 * result + role.hashCode()
         result = 31 * result + content.hashCode()
         result = 31 * result + (imageBytes?.contentHashCode() ?: 0)
+        result = 31 * result + (imageFilePath?.hashCode() ?: 0)
         result = 31 * result + (imageMimeType?.hashCode() ?: 0)
+        result = 31 * result + hasImage.hashCode()
         result = 31 * result + (sourceMessageId?.hashCode() ?: 0)
         result = 31 * result + (parentMessageId?.hashCode() ?: 0)
         result = 31 * result + (activeChildMessageId?.hashCode() ?: 0)

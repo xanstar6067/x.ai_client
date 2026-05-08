@@ -25,9 +25,36 @@ data class ImageMessageEntity(
     val role: MessageRole,
     val content: String,
     val imageBytes: ByteArray? = null,
+    val imageFilePath: String? = null,
     val imageMimeType: String? = null,
     val sourceMessageId: Long? = null,
     val parentMessageId: Long? = null,
     val activeChildMessageId: Long? = null,
     val createdAt: Long
+)
+
+data class ImageMessageSummary(
+    val id: Long,
+    val chatId: Long,
+    val role: MessageRole,
+    val content: String,
+    val imageFilePath: String? = null,
+    val imageMimeType: String? = null,
+    val hasImage: Boolean = false,
+    val sourceMessageId: Long? = null,
+    val parentMessageId: Long? = null,
+    val activeChildMessageId: Long? = null,
+    val createdAt: Long
+)
+
+data class ImagePayload(
+    val imageBytes: ByteArray? = null,
+    val imageFilePath: String? = null,
+    val imageMimeType: String? = null
+)
+
+data class LegacyImageRef(
+    val id: Long,
+    val imageMimeType: String? = null,
+    val byteCount: Int
 )

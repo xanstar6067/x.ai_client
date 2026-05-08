@@ -758,7 +758,11 @@ private fun ImageMessageCard(
 @Composable
 private fun ImagePreview(image: GeneratedImage) {
     val bitmap = remember(image) {
-        BitmapFactory.decodeByteArray(image.bytes, 0, image.bytes.size)
+        image.filePath
+            ?.let { BitmapFactory.decodeFile(it) }
+            ?: image.bytes?.let { bytes ->
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }
     }
     Box(
         modifier = Modifier

@@ -10,6 +10,7 @@ import androidx.room.withTransaction
 import com.adam.xai_client.data.local.database.AppDatabase
 import com.adam.xai_client.data.local.entity.ImageChatEntity
 import com.adam.xai_client.data.local.entity.ImageMessageEntity
+import com.adam.xai_client.data.local.entity.ImageMessageSummary
 import com.adam.xai_client.data.remote.api.XaiApiClient
 import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.GeneratedImage
@@ -73,6 +74,35 @@ class ImageRepository(
             baseUrl = settings.baseUrl,
             options = options.copy(prompt = prompt)
         )
+    }
+
+    suspend fun recoverLegacyStoredImages() {
+        imageMessageDao.getLegacyImageRefs().forEach { legacyImage ->
+            val file = legacyImageFile(legacyImage.id, legacyImage.imageMimeType)
+            runCatching {
+                val parentDir = file.parentFile
+                    ?: throw IllegalStateException("Cannot resolve image storage directory.")
+                if (!parentDir.exists() && !parentDir.mkdirs()) {
+                    throw IllegalStateException("Cannot create image storage directory.")
+                }
+                file.outputStream().use { output ->
+                    var offset = 1
+                    while (offset <= legacyImage.byteCount) {
+                        val chunkSize = minOf(LEGACY_IMAGE_CHUNK_SIZE, legacyImage.byteCount - offset + 1)
+                        val chunk = imageMessageDao.getImageBytesChunk(
+                            messageId = legacyImage.id,
+                            start = offset,
+                            length = chunkSize
+                        ) ?: throw IllegalStateException("Cannot read image chunk.")
+                        output.write(chunk)
+                        offset += chunk.size
+                    }
+                }
+                imageMessageDao.moveImageToFile(legacyImage.id, file.absolutePath)
+            }.onFailure {
+                file.delete()
+            }
+        }
     }
 
     suspend fun createChat(
@@ -176,13 +206,15 @@ class ImageRepository(
         parentMessageId: Long? = null,
         now: Long = System.currentTimeMillis()
     ): Long {
+        val imageFile = persistGeneratedImage(image, now)
         return database.withTransaction {
             val messageId = imageMessageDao.insertMessage(
                 ImageMessageEntity(
                     chatId = chatId,
                     role = MessageRole.ASSISTANT,
                     content = content,
-                    imageBytes = image.bytes,
+                    imageBytes = null,
+                    imageFilePath = imageFile.absolutePath,
                     imageMimeType = image.mimeType,
                     sourceMessageId = sourceMessageId,
                     parentMessageId = parentMessageId,
@@ -226,7 +258,7 @@ class ImageRepository(
             val parentId = message.parentMessageId ?: return@withTransaction
             val siblings = imageMessageDao.getMessages(message.chatId)
                 .filter { it.parentMessageId == parentId && it.role == message.role }
-                .sortedWith(compareBy<ImageMessageEntity> { it.createdAt }.thenBy { it.id })
+                .sortedWith(compareBy<ImageMessageSummary> { it.createdAt }.thenBy { it.id })
             if (siblings.size <= 1) return@withTransaction
             val currentIndex = siblings.indexOfFirst { it.id == messageId }
             if (currentIndex < 0) return@withTransaction
@@ -238,7 +270,7 @@ class ImageRepository(
     }
 
     fun imageAsDataUrl(image: GeneratedImage): String {
-        val base64 = Base64.getEncoder().encodeToString(image.bytes)
+        val base64 = Base64.getEncoder().encodeToString(image.readBytes())
         return "data:${image.mimeType};base64,$base64"
     }
 
@@ -273,7 +305,7 @@ class ImageRepository(
 
         runCatching {
             resolver.openOutputStream(uri)?.use { output ->
-                output.write(image.bytes)
+                output.write(image.readBytes())
             } ?: throw IllegalStateException("Не удалось открыть файл изображения.")
             values.clear()
             values.put(MediaStore.Images.Media.IS_PENDING, 0)
@@ -294,24 +326,57 @@ class ImageRepository(
             throw IllegalStateException("Не удалось создать папку Pictures/$APP_PICTURES_DIR.")
         }
         val file = File(appDir, fileName)
-        file.outputStream().use { output -> output.write(image.bytes) }
+        file.outputStream().use { output -> output.write(image.readBytes()) }
         return Uri.fromFile(file)
+    }
+
+    private fun persistGeneratedImage(image: GeneratedImage, createdAt: Long): File {
+        val extension = when (image.mimeType.substringAfterLast('/')) {
+            "png" -> "png"
+            "webp" -> "webp"
+            else -> "jpg"
+        }
+        val imagesDir = File(context.filesDir, GENERATED_IMAGES_DIR)
+        if (!imagesDir.exists() && !imagesDir.mkdirs()) {
+            throw IllegalStateException("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ РїР°РїРєСѓ РґР»СЏ РёР·РѕР±СЂР°Р¶РµРЅРёР№.")
+        }
+        val file = File(imagesDir, "image_${createdAt}_${System.nanoTime()}.$extension")
+        file.outputStream().use { output -> output.write(image.readBytes()) }
+        return file
+    }
+
+    private fun legacyImageFile(messageId: Long, mimeType: String?): File {
+        val extension = when (mimeType?.substringAfterLast('/')) {
+            "png" -> "png"
+            "webp" -> "webp"
+            else -> "jpg"
+        }
+        return File(File(context.filesDir, GENERATED_IMAGES_DIR), "legacy_image_$messageId.$extension")
+    }
+
+    private fun GeneratedImage.readBytes(): ByteArray {
+        bytes?.let { return it }
+        val path = filePath?.takeIf { it.isNotBlank() }
+            ?: throw IllegalStateException("Р¤Р°Р№Р» РёР·РѕР±СЂР°Р¶РµРЅРёСЏ РЅРµ РЅР°Р№РґРµРЅ.")
+        return File(path).readBytes()
     }
 
     private companion object {
         const val APP_PICTURES_DIR = "xAI Chat"
+        const val GENERATED_IMAGES_DIR = "generated_images"
+        const val LEGACY_IMAGE_CHUNK_SIZE = 512 * 1024
         const val NEW_CHAT_TITLE = "Новый image-чат"
     }
-    private fun List<ImageMessageEntity>.activePath(): List<ImageMessageEntity> {
+    private fun List<ImageMessageSummary>.activePath(): List<ImageMessageSummary> {
         if (isEmpty()) return emptyList()
         val byId = associateBy { it.id }
         val byParent = groupBy { it.parentMessageId }
-        val result = mutableListOf<ImageMessageEntity>()
+        val result = mutableListOf<ImageMessageSummary>()
         var parentId: Long? = null
         val visited = mutableSetOf<Long>()
         while (true) {
             val children = byParent[parentId]
-                ?.sortedWith(compareBy<ImageMessageEntity> { it.createdAt }.thenBy { it.id })
+                ?.sortedWith(compareBy<ImageMessageSummary> { it.createdAt }.thenBy { it.id })
                 .orEmpty()
             if (children.isEmpty()) break
             val activeChildId = parentId?.let { byId[it]?.activeChildMessageId }
@@ -325,13 +390,13 @@ class ImageRepository(
         return result
     }
 
-    private fun List<ImageMessageEntity>.mapActivePathWithVersions(
-        allMessages: List<ImageMessageEntity>
+    private fun List<ImageMessageSummary>.mapActivePathWithVersions(
+        allMessages: List<ImageMessageSummary>
     ): List<ImageChatMessage> {
         val siblingGroups = allMessages
             .groupBy { Pair(it.parentMessageId, it.role) }
             .mapValues { (_, siblings) ->
-                siblings.sortedWith(compareBy<ImageMessageEntity> { it.createdAt }.thenBy { it.id })
+                siblings.sortedWith(compareBy<ImageMessageSummary> { it.createdAt }.thenBy { it.id })
             }
         return map { entity ->
             val siblings = siblingGroups[Pair(entity.parentMessageId, entity.role)].orEmpty()

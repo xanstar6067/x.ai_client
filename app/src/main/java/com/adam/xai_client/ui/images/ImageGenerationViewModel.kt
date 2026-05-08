@@ -63,6 +63,9 @@ class ImageGenerationViewModel(
 
     init {
         viewModelScope.launch {
+            imageRepository.recoverLegacyStoredImages()
+        }
+        viewModelScope.launch {
             imageRepository.imageChats.collect { chats ->
                 _uiState.update { state ->
                     val selectedChatId = state.selectedChatId
