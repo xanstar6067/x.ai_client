@@ -345,37 +345,34 @@ private fun ChatInput(
                 imeAction = ImeAction.Default
             ),
             minLines = 1,
-            maxLines = 6
+            maxLines = 6,
+            trailingIcon = {
+                IconButton(
+                    onClick = { onWebSearchEnabledChange(!webSearchEnabled) },
+                    enabled = !isSending
+                ) {
+                    Icon(
+                        Icons.Filled.Search,
+                        contentDescription = if (webSearchEnabled) {
+                            "Отключить веб-поиск"
+                        } else {
+                            "Включить веб-поиск"
+                        },
+                        tint = if (webSearchEnabled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+            }
         )
-        Column(
-            modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        IconButton(
+            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+            onClick = sendAndHideKeyboard,
+            enabled = !isSending && inputText.isNotBlank()
         ) {
-            IconButton(
-                onClick = { onWebSearchEnabledChange(!webSearchEnabled) },
-                enabled = !isSending
-            ) {
-                Icon(
-                    Icons.Filled.Search,
-                    contentDescription = if (webSearchEnabled) {
-                        "Отключить веб-поиск"
-                    } else {
-                        "Включить веб-поиск"
-                    },
-                    tint = if (webSearchEnabled) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
-            }
-            IconButton(
-                onClick = sendAndHideKeyboard,
-                enabled = !isSending && inputText.isNotBlank()
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
-            }
+            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
         }
     }
 }

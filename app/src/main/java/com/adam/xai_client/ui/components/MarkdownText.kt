@@ -1,12 +1,14 @@
 package com.adam.xai_client.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +23,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -118,6 +121,10 @@ private fun MarkdownTable(
     table: MarkdownBlock.Table,
     color: Color
 ) {
+    val columnCount = table.columnCount
+    val header = table.header.normalizedTo(columnCount)
+    val rows = table.rows.map { it.normalizedTo(columnCount) }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -128,10 +135,21 @@ private fun MarkdownTable(
         shape = MaterialTheme.shapes.small
     ) {
         Column(modifier = Modifier.padding(vertical = 4.dp)) {
-            TableRow(table.header, color, header = true)
+            TableRow(
+                cells = header,
+                alignments = table.alignments,
+                color = color,
+                header = true
+            )
             HorizontalDivider(color = color.copy(alpha = 0.18f))
-            table.rows.forEach { row ->
-                TableRow(row, color, header = false)
+            rows.forEachIndexed { index, row ->
+                TableRow(
+                    cells = row,
+                    alignments = table.alignments,
+                    color = color,
+                    header = false,
+                    shaded = index % 2 == 1
+                )
             }
         }
     }
@@ -140,18 +158,31 @@ private fun MarkdownTable(
 @Composable
 private fun TableRow(
     cells: List<String>,
+    alignments: List<TableAlignment>,
     color: Color,
-    header: Boolean
+    header: Boolean,
+    shaded: Boolean = false
 ) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        cells.forEach { cell ->
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (shaded) {
+                    color.copy(alpha = 0.04f)
+                } else {
+                    Color.Transparent
+                }
+            )
+    ) {
+        cells.forEachIndexed { index, cell ->
             Text(
                 text = cell.toInlineMarkdown(),
                 style = MaterialTheme.typography.bodySmall,
                 color = color,
                 fontWeight = if (header) FontWeight.SemiBold else null,
+                textAlign = alignments.getOrElse(index) { TableAlignment.Left }.textAlign,
                 modifier = Modifier
-                    .weight(1f)
+                    .width(148.dp)
                     .padding(horizontal = 10.dp, vertical = 6.dp)
             )
         }
@@ -164,7 +195,23 @@ private sealed interface MarkdownBlock {
     data class ListItems(val ordered: Boolean, val items: List<String>) : MarkdownBlock
     data class Code(val text: String) : MarkdownBlock
     data class Quote(val text: String) : MarkdownBlock
-    data class Table(val header: List<String>, val rows: List<List<String>>) : MarkdownBlock
+    data class Table(
+        val header: List<String>,
+        val alignments: List<TableAlignment>,
+        val rows: List<List<String>>
+    ) : MarkdownBlock {
+        val columnCount: Int = maxOf(
+            header.size,
+            alignments.size,
+            rows.maxOfOrNull { it.size } ?: 0
+        )
+    }
+}
+
+private enum class TableAlignment(val textAlign: TextAlign) {
+    Left(TextAlign.Start),
+    Center(TextAlign.Center),
+    Right(TextAlign.End)
 }
 
 private fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
@@ -203,13 +250,18 @@ private fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
 
         if (isTableStart(lines, index)) {
             val header = splitTableRow(lines[index])
+            val alignments = parseTableAlignments(lines[index + 1])
             index += 2
             val rows = mutableListOf<List<String>>()
             while (index < lines.size && looksLikeTableRow(lines[index])) {
                 rows += splitTableRow(lines[index])
                 index++
             }
-            blocks += MarkdownBlock.Table(header = header, rows = rows)
+            blocks += MarkdownBlock.Table(
+                header = header,
+                alignments = alignments,
+                rows = rows
+            )
             continue
         }
 
@@ -328,10 +380,52 @@ private fun looksLikeTableRow(line: String): Boolean {
 }
 
 private fun splitTableRow(line: String): List<String> {
-    return line.trim()
+    return splitUnescapedPipes(
+        line.trim()
         .trim('|')
-        .split("|")
-        .map { it.trim() }
+    ).map { it.replace("\\|", "|").trim() }
+}
+
+private fun splitUnescapedPipes(line: String): List<String> {
+    val cells = mutableListOf<String>()
+    val cell = StringBuilder()
+    var escaped = false
+    line.forEach { char ->
+        when {
+            escaped -> {
+                cell.append(char)
+                escaped = false
+            }
+            char == '\\' -> {
+                cell.append(char)
+                escaped = true
+            }
+            char == '|' -> {
+                cells += cell.toString()
+                cell.clear()
+            }
+            else -> cell.append(char)
+        }
+    }
+    cells += cell.toString()
+    return cells
+}
+
+private fun parseTableAlignments(separator: String): List<TableAlignment> {
+    return splitTableRow(separator).map { cell ->
+        val trimmed = cell.trim()
+        when {
+            trimmed.startsWith(":") && trimmed.endsWith(":") -> TableAlignment.Center
+            trimmed.endsWith(":") -> TableAlignment.Right
+            else -> TableAlignment.Left
+        }
+    }
+}
+
+private fun List<String>.normalizedTo(size: Int): List<String> {
+    if (this.size == size) return this
+    if (this.size > size) return take(size)
+    return this + List(size - this.size) { "" }
 }
 
 private val tableSeparatorRegex = Regex("^\\|?\\s*:?-{3,}:?\\s*(\\|\\s*:?-{3,}:?\\s*)+\\|?$")
