@@ -56,7 +56,7 @@ class BackupViewModel(
                     _uiState.update {
                         it.copy(
                             isBusy = false,
-                            message = "Восстановлено чатов: ${summary.chatCount}, чатов с изображениями: ${summary.imageChatCount}.",
+                            message = "Восстановлено чатов: ${summary.chatCount}, чатов с изображениями: ${summary.imageChatCount}, video-чатов: ${summary.videoChatCount}.",
                             error = null
                         )
                     }

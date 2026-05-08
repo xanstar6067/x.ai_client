@@ -14,6 +14,8 @@ import com.adam.xai_client.data.local.entity.ImageChatEntity
 import com.adam.xai_client.data.local.entity.ImageMessageEntity
 import com.adam.xai_client.data.local.entity.MessageEntity
 import com.adam.xai_client.data.local.entity.ModelRoleEntity
+import com.adam.xai_client.data.local.entity.VideoChatEntity
+import com.adam.xai_client.data.local.entity.VideoMessageEntity
 import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.ReasoningEffort
 import kotlinx.serialization.Serializable
@@ -44,7 +46,9 @@ class BackupRepository(
                 chatModelSettings = database.chatModelSettingsDao().getAllSettings().map { it.toBackup() },
                 roles = database.modelRoleDao().getAllRoles().map { it.toBackup() },
                 imageChats = database.imageChatDao().getAllChats().map { it.toBackup() },
-                imageMessages = database.imageMessageDao().getAllMessages().map { it.toBackup() }
+                imageMessages = database.imageMessageDao().getAllMessages().map { it.toBackup() },
+                videoChats = database.videoChatDao().getAllChats().map { it.toBackup() },
+                videoMessages = database.videoMessageDao().getAllMessages().map { it.toBackup() }
             )
         }
         val content = json.encodeToString(backup)
@@ -61,12 +65,18 @@ class BackupRepository(
             input.bufferedReader().readText()
         } ?: throw IllegalStateException("Unable to open backup file.")
         val backup = json.decodeFromString<ChatBackupDto>(content)
+        val existingVideoPaths = database.videoMessageDao().getAllMessages()
+            .mapNotNull { it.videoFilePath }
+            .toSet()
+        val restoredVideoPaths = mutableSetOf<String>()
         database.withTransaction {
             database.messageDao().deleteAllMessages()
             database.imageMessageDao().deleteAllMessages()
+            database.videoMessageDao().deleteAllMessages()
             database.chatModelSettingsDao().deleteAllSettings()
             database.chatDao().deleteAllChats()
             database.imageChatDao().deleteAllChats()
+            database.videoChatDao().deleteAllChats()
             if (backup.roles.isNotEmpty()) {
                 database.modelRoleDao().deleteAllRoles()
                 database.modelRoleDao().insertRoles(backup.roles.map { it.toEntity() })
@@ -77,10 +87,24 @@ class BackupRepository(
             database.chatModelSettingsDao().upsertSettings(backup.chatModelSettings.map { it.toEntity() })
             database.messageDao().insertMessages(backup.messages.map { it.toEntity() })
             database.imageMessageDao().insertMessages(backup.imageMessages.map { it.toEntity() })
+            database.videoChatDao().insertChats(backup.videoChats.map { it.toEntity() })
+            database.videoMessageDao().insertMessages(
+                backup.videoMessages.map { message ->
+                    val videoFilePath = restoreVideoFile(message.videoBase64, message.videoMimeType)
+                        ?: message.videoFilePath
+                    message.toEntity(videoFilePath).also { entity ->
+                        entity.videoFilePath?.let(restoredVideoPaths::add)
+                    }
+                }
+            )
         }
+        existingVideoPaths
+            .filterNot { it in restoredVideoPaths }
+            .forEach(::deleteVideoFile)
         return BackupImportSummary(
             chatCount = backup.chats.size,
-            imageChatCount = backup.imageChats.size
+            imageChatCount = backup.imageChats.size,
+            videoChatCount = backup.videoChats.size
         )
     }
 
@@ -127,26 +151,54 @@ class BackupRepository(
         return SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
     }
 
+    private fun restoreVideoFile(videoBase64: String?, mimeType: String?): String? {
+        val bytes = videoBase64?.let { Base64.getDecoder().decode(it) } ?: return null
+        val dir = File(context.filesDir, APP_VIDEOS_DIR)
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw IllegalStateException("Unable to create video storage directory.")
+        }
+        val file = File(
+            dir,
+            "restored_${System.currentTimeMillis()}_${System.nanoTime()}.${mimeType.toVideoExtension()}"
+        )
+        file.writeBytes(bytes)
+        return file.absolutePath
+    }
+
+    private fun deleteVideoFile(path: String) {
+        runCatching {
+            val storageRoot = File(context.filesDir, APP_VIDEOS_DIR).canonicalFile
+            val target = File(path).canonicalFile
+            if (target.path.startsWith(storageRoot.path) && target.exists()) {
+                target.delete()
+            }
+        }
+    }
+
     private companion object {
         const val BACKUP_DIR = "xAI Chat Backups"
+        const val APP_VIDEOS_DIR = "generated_videos"
     }
 }
 
 data class BackupImportSummary(
     val chatCount: Int,
-    val imageChatCount: Int
+    val imageChatCount: Int,
+    val videoChatCount: Int
 )
 
 @Serializable
 private data class ChatBackupDto(
-    val schemaVersion: Int = 1,
+    val schemaVersion: Int = 2,
     val exportedAt: Long,
     val chats: List<BackupChatDto>,
     val messages: List<BackupMessageDto>,
     val chatModelSettings: List<BackupChatModelSettingsDto>,
     val roles: List<BackupModelRoleDto> = emptyList(),
     val imageChats: List<BackupImageChatDto>,
-    val imageMessages: List<BackupImageMessageDto>
+    val imageMessages: List<BackupImageMessageDto>,
+    val videoChats: List<BackupVideoChatDto> = emptyList(),
+    val videoMessages: List<BackupVideoMessageDto> = emptyList()
 )
 
 @Serializable
@@ -212,6 +264,35 @@ private data class BackupImageMessageDto(
     val imageBase64: String?,
     val imageMimeType: String?,
     val sourceMessageId: Long?,
+    val parentMessageId: Long?,
+    val activeChildMessageId: Long?,
+    val createdAt: Long
+)
+
+@Serializable
+private data class BackupVideoChatDto(
+    val id: Long,
+    val title: String,
+    val createdAt: Long,
+    val updatedAt: Long,
+    val selectedModelId: String?
+)
+
+@Serializable
+private data class BackupVideoMessageDto(
+    val id: Long,
+    val chatId: Long,
+    val role: String,
+    val content: String,
+    val sourceImageUrl: String?,
+    val videoBase64: String?,
+    val videoFilePath: String?,
+    val videoMimeType: String?,
+    val videoDurationSeconds: Int?,
+    val videoRespectModeration: Boolean?,
+    val requestId: String?,
+    val aspectRatio: String?,
+    val resolution: String?,
     val parentMessageId: Long?,
     val activeChildMessageId: Long?,
     val createdAt: Long
@@ -340,3 +421,68 @@ private fun BackupImageMessageDto.toEntity(): ImageMessageEntity = ImageMessageE
     activeChildMessageId = activeChildMessageId,
     createdAt = createdAt
 )
+
+private fun VideoChatEntity.toBackup(): BackupVideoChatDto = BackupVideoChatDto(
+    id = id,
+    title = title,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+    selectedModelId = selectedModelId
+)
+
+private fun BackupVideoChatDto.toEntity(): VideoChatEntity = VideoChatEntity(
+    id = id,
+    title = title,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+    selectedModelId = selectedModelId
+)
+
+private fun VideoMessageEntity.toBackup(): BackupVideoMessageDto {
+    val videoBytes = videoFilePath
+        ?.let { path -> runCatching { File(path).takeIf { it.exists() }?.readBytes() }.getOrNull() }
+    return BackupVideoMessageDto(
+        id = id,
+        chatId = chatId,
+        role = role.name,
+        content = content,
+        sourceImageUrl = sourceImageUrl,
+        videoBase64 = videoBytes?.let { Base64.getEncoder().encodeToString(it) },
+        videoFilePath = videoFilePath,
+        videoMimeType = videoMimeType,
+        videoDurationSeconds = videoDurationSeconds,
+        videoRespectModeration = videoRespectModeration,
+        requestId = requestId,
+        aspectRatio = aspectRatio,
+        resolution = resolution,
+        parentMessageId = parentMessageId,
+        activeChildMessageId = activeChildMessageId,
+        createdAt = createdAt
+    )
+}
+
+private fun BackupVideoMessageDto.toEntity(restoredVideoFilePath: String?): VideoMessageEntity = VideoMessageEntity(
+    id = id,
+    chatId = chatId,
+    role = runCatching { MessageRole.valueOf(role) }.getOrDefault(MessageRole.USER),
+    content = content,
+    sourceImageUrl = sourceImageUrl,
+    videoFilePath = restoredVideoFilePath,
+    videoMimeType = videoMimeType,
+    videoDurationSeconds = videoDurationSeconds,
+    videoRespectModeration = videoRespectModeration,
+    requestId = requestId,
+    aspectRatio = aspectRatio,
+    resolution = resolution,
+    parentMessageId = parentMessageId,
+    activeChildMessageId = activeChildMessageId,
+    createdAt = createdAt
+)
+
+private fun String?.toVideoExtension(): String {
+    return when (orEmpty().substringAfterLast('/').lowercase()) {
+        "quicktime", "mov" -> "mov"
+        "webm" -> "webm"
+        else -> "mp4"
+    }
+}
