@@ -8,14 +8,12 @@ import com.adam.xai_client.domain.model.Chat
 import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.MessageRole
-import com.adam.xai_client.domain.token.TokenCounter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 class ChatRepository(
-    private val database: AppDatabase,
-    private val tokenCounter: TokenCounter
+    private val database: AppDatabase
 ) {
     private val chatDao = database.chatDao()
     private val messageDao = database.messageDao()
@@ -74,6 +72,7 @@ class ChatRepository(
         role: MessageRole,
         content: String,
         reasoningContent: String? = null,
+        tokenCount: Int? = null,
         parentMessageId: Long? = null,
         now: Long = System.currentTimeMillis()
     ): Long {
@@ -84,7 +83,7 @@ class ChatRepository(
                     role = role,
                     content = content,
                     reasoningContent = reasoningContent,
-                    tokenCount = tokenCounter.countMessage(content, reasoningContent),
+                    tokenCount = tokenCount,
                     parentMessageId = parentMessageId,
                     createdAt = now
                 )
@@ -99,13 +98,14 @@ class ChatRepository(
     suspend fun updateMessageContent(
         messageId: Long,
         content: String,
-        reasoningContent: String?
+        reasoningContent: String?,
+        tokenCount: Int? = null
     ) {
         messageDao.updateMessageContent(
             messageId = messageId,
             content = content,
             reasoningContent = reasoningContent,
-            tokenCount = tokenCounter.countMessage(content, reasoningContent)
+            tokenCount = tokenCount
         )
     }
 
@@ -119,7 +119,7 @@ class ChatRepository(
             messageId = messageId,
             content = trimmedContent,
             reasoningContent = reasoningContent,
-            tokenCount = tokenCounter.countMessage(trimmedContent, reasoningContent)
+            tokenCount = null
         )
     }
 
@@ -259,9 +259,7 @@ class ChatRepository(
     }
 
     private fun MessageEntity.asDomainWithTokens(): Message {
-        return asDomain().copy(
-            tokenCount = tokenCount ?: tokenCounter.countMessage(content, reasoningContent)
-        )
+        return asDomain()
     }
 
     private fun List<MessageEntity>.activePath(): List<MessageEntity> {

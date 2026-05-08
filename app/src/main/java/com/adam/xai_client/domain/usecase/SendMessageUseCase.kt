@@ -109,6 +109,7 @@ class SendMessageUseCase(
 
         val assistantReply = StringBuilder()
         val reasoningContent = StringBuilder()
+        var responseTokenCount: Int? = null
         try {
             apiClient.streamChatRequest(
                 apiKey = settings.apiKey,
@@ -123,11 +124,16 @@ class SendMessageUseCase(
                 if (delta.reasoningContent.isNotEmpty()) {
                     reasoningContent.append(delta.reasoningContent)
                 }
-                chatRepository.updateMessageContent(
-                    messageId = assistantMessageId,
-                    content = assistantReply.toString(),
-                    reasoningContent = reasoningContent.toString().ifBlank { null }
-                )
+                delta.tokenUsage?.let { usage ->
+                    responseTokenCount = usage.totalTokens.takeIf { it > 0 }
+                }
+                if (delta.content.isNotEmpty() || delta.reasoningContent.isNotEmpty()) {
+                    chatRepository.updateMessageContent(
+                        messageId = assistantMessageId,
+                        content = assistantReply.toString(),
+                        reasoningContent = reasoningContent.toString().ifBlank { null }
+                    )
+                }
             }
         } catch (exception: Exception) {
             chatRepository.deleteMessage(assistantMessageId)
@@ -154,7 +160,8 @@ class SendMessageUseCase(
         chatRepository.updateMessageContent(
             messageId = assistantMessageId,
             content = finalReply,
-            reasoningContent = finalReasoning.ifBlank { null }
+            reasoningContent = finalReasoning.ifBlank { null },
+            tokenCount = responseTokenCount
         )
         chatRepository.touchChat(targetChatId)
 

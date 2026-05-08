@@ -128,9 +128,12 @@ fun MessageBubble(
                     ) {
                         Text(
                             text = buildString {
-                                append("${message.tokenCount} tok.")
+                                if (message.tokenCount > 0) {
+                                    append("${message.tokenCount} tok.")
+                                }
                                 if (message.versionCount > 1) {
-                                    append(" ${message.versionIndex}/${message.versionCount}")
+                                    if (isNotEmpty()) append(" ")
+                                    append("${message.versionIndex}/${message.versionCount}")
                                 }
                             },
                             style = MaterialTheme.typography.labelSmall,

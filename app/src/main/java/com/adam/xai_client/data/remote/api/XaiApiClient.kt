@@ -9,7 +9,17 @@ import kotlinx.coroutines.flow.Flow
 
 data class ChatStreamDelta(
     val content: String = "",
-    val reasoningContent: String = ""
+    val reasoningContent: String = "",
+    val tokenUsage: TokenUsage? = null
+)
+
+data class TokenUsage(
+    val promptTokens: Int = 0,
+    val completionTokens: Int = 0,
+    val totalTokens: Int = 0,
+    val cachedTokens: Int = 0,
+    val reasoningTokens: Int = 0,
+    val imageTokens: Int = 0
 )
 
 interface XaiApiClient {

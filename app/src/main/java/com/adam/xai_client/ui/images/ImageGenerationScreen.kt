@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -65,7 +68,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -129,6 +135,7 @@ fun ImageGenerationScreen(
     )
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
@@ -343,8 +350,7 @@ private fun ImageChatContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(padding)
-            .imePadding(),
+            .padding(padding),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         ImageChatControls(
@@ -475,11 +481,18 @@ private fun ImagePromptBar(
     onClearEditSource: () -> Unit,
     onGenerate: () -> Unit
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val generateAndHideKeyboard = {
+        keyboardController?.hide()
+        onGenerate()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .imePadding()
             .navigationBarsPadding()
-            .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 12.dp),
+            .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         state.editingMessageId?.let {
@@ -497,6 +510,10 @@ private fun ImagePromptBar(
             enabled = state.editingMessageId == null,
             label = { Text("URL исходной картинки") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.None,
+                imeAction = ImeAction.Next
+            ),
             modifier = Modifier.fillMaxWidth()
         )
         Row(
@@ -508,16 +525,30 @@ private fun ImagePromptBar(
                 value = state.prompt,
                 onValueChange = onPromptChange,
                 label = { Text("Запрос") },
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    imeAction = ImeAction.Send
+                ),
+                keyboardActions = KeyboardActions(
+                    onSend = {
+                        if (!state.isGenerating &&
+                            state.prompt.isNotBlank() &&
+                            state.selectedModelId != null
+                        ) {
+                            generateAndHideKeyboard()
+                        }
+                    }
+                ),
                 minLines = 1,
                 maxLines = 4,
                 modifier = Modifier.weight(1f)
             )
             IconButton(
-                onClick = onGenerate,
+                onClick = generateAndHideKeyboard,
                 enabled = !state.isGenerating &&
                     state.prompt.isNotBlank() &&
                     state.selectedModelId != null,
-                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
             ) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
             }

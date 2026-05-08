@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,6 +17,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -45,7 +48,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.AiModel
@@ -102,6 +108,7 @@ fun ChatScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
@@ -138,7 +145,6 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .imePadding()
         ) {
             ChatSelectors(
                 models = state.availableModels,
@@ -256,7 +262,7 @@ private fun TokenSummaryBar(
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         Text(
-            text = "Чат: $chatTokenCount ток.",
+            text = "Чат: $chatTokenCount",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -313,11 +319,18 @@ private fun ChatInput(
     onInputChange: (String) -> Unit,
     onSend: () -> Unit
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val sendAndHideKeyboard = {
+        keyboardController?.hide()
+        onSend()
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .imePadding()
             .navigationBarsPadding()
-            .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 12.dp),
+            .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 4.dp),
         verticalAlignment = Alignment.Bottom
     ) {
         OutlinedTextField(
@@ -325,14 +338,24 @@ private fun ChatInput(
             onValueChange = onInputChange,
             modifier = Modifier.weight(1f),
             label = { Text("Сообщение") },
-            supportingText = { Text("Токены: $inputTokenCount") },
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Sentences,
+                imeAction = ImeAction.Send
+            ),
+            keyboardActions = KeyboardActions(
+                onSend = {
+                    if (!isSending && inputText.isNotBlank()) {
+                        sendAndHideKeyboard()
+                    }
+                }
+            ),
             minLines = 1,
             maxLines = 6
         )
         IconButton(
-            onClick = onSend,
+            onClick = sendAndHideKeyboard,
             enabled = !isSending && inputText.isNotBlank(),
-            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+            modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
         ) {
             Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
         }

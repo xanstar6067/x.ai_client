@@ -41,7 +41,7 @@ class AppContainer(context: Context) {
 
     val backupRepository: BackupRepository = BackupRepository(appContext, database)
 
-    val chatRepository: ChatRepository = ChatRepository(database, tokenCounter)
+    val chatRepository: ChatRepository = ChatRepository(database)
 
     val roleRepository: RoleRepository = RoleRepository(
         modelRoleDao = database.modelRoleDao(),

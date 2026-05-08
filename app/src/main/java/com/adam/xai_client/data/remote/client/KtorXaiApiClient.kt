@@ -11,6 +11,7 @@ import com.adam.xai_client.data.remote.dto.ImageResponseDto
 import com.adam.xai_client.data.remote.dto.ModelsResponseDto
 import com.adam.xai_client.data.remote.dto.ResponsesResponseDto
 import com.adam.xai_client.data.remote.dto.ResponsesStreamEventDto
+import com.adam.xai_client.data.remote.dto.asDomain
 import com.adam.xai_client.data.remote.dto.chatCompletionRequestDto
 import com.adam.xai_client.data.remote.dto.outputTextContent
 import com.adam.xai_client.data.remote.dto.responsesRequestDto
@@ -293,7 +294,10 @@ class KtorXaiApiClient(
                 throwIfApiError(line)
                 val completion = json.decodeFromString<ResponsesResponseDto>(line)
                 val text = completion.outputTextContent()
-                if (text.isNotEmpty()) emit(ChatStreamDelta(content = text))
+                val tokenUsage = completion.usage?.asDomain()
+                if (text.isNotEmpty() || tokenUsage != null) {
+                    emit(ChatStreamDelta(content = text, tokenUsage = tokenUsage))
+                }
                 return@flow
             }
             if (line.isBlank()) {
@@ -314,8 +318,15 @@ class KtorXaiApiClient(
         val message = completion.choices.firstOrNull()?.message ?: return
         val content = message.content.orEmpty()
         val reasoningContent = message.reasoning_content.orEmpty()
-        if (content.isNotEmpty() || reasoningContent.isNotEmpty()) {
-            emit(ChatStreamDelta(content = content, reasoningContent = reasoningContent))
+        val tokenUsage = completion.usage?.asDomain()
+        if (content.isNotEmpty() || reasoningContent.isNotEmpty() || tokenUsage != null) {
+            emit(
+                ChatStreamDelta(
+                    content = content,
+                    reasoningContent = reasoningContent,
+                    tokenUsage = tokenUsage
+                )
+            )
         }
     }
 
@@ -325,14 +336,16 @@ class KtorXaiApiClient(
 
         throwIfApiError(payload)
         val chunk = json.decodeFromString<ChatCompletionResponseDto>(payload)
-        val delta = chunk.choices.firstOrNull()?.delta ?: return
-        val content = delta.content.orEmpty()
-        val reasoningContent = delta.reasoning_content.orEmpty()
-        if (content.isNotEmpty() || reasoningContent.isNotEmpty()) {
+        val delta = chunk.choices.firstOrNull()?.delta
+        val content = delta?.content.orEmpty()
+        val reasoningContent = delta?.reasoning_content.orEmpty()
+        val tokenUsage = chunk.usage?.asDomain()
+        if (content.isNotEmpty() || reasoningContent.isNotEmpty() || tokenUsage != null) {
             emit(
                 ChatStreamDelta(
                     content = content,
-                    reasoningContent = reasoningContent
+                    reasoningContent = reasoningContent,
+                    tokenUsage = tokenUsage
                 )
             )
         }
@@ -347,6 +360,9 @@ class KtorXaiApiClient(
         when (event.type) {
             "response.output_text.delta" -> event.delta?.takeIf { it.isNotEmpty() }?.let {
                 emit(ChatStreamDelta(content = it))
+            }
+            "response.completed" -> event.response?.usage?.asDomain()?.let {
+                emit(ChatStreamDelta(tokenUsage = it))
             }
         }
     }
