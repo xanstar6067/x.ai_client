@@ -30,7 +30,7 @@ import com.adam.xai_client.data.local.entity.ModelRoleEntity
         ImageChatEntity::class,
         ImageMessageEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -131,6 +131,22 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE chat_model_settings ADD COLUMN webSearchEnabled INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN aliases TEXT")
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN fingerprint TEXT")
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN version TEXT")
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN inputModalities TEXT")
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN outputModalities TEXT")
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN maxPromptLength INTEGER")
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN promptTextTokenPrice INTEGER")
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN cachedPromptTextTokenPrice INTEGER")
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN completionTextTokenPrice INTEGER")
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN promptImageTokenPrice INTEGER")
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN searchPrice INTEGER")
             }
         }
 

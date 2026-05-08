@@ -9,5 +9,16 @@ data class AiModelEntity(
     val id: String,
     val name: String,
     val isEnabledForChat: Boolean = false,
+    val aliases: String? = null,
+    val fingerprint: String? = null,
+    val version: String? = null,
+    val inputModalities: String? = null,
+    val outputModalities: String? = null,
+    val maxPromptLength: Int? = null,
+    val promptTextTokenPrice: Int? = null,
+    val cachedPromptTextTokenPrice: Int? = null,
+    val completionTextTokenPrice: Int? = null,
+    val promptImageTokenPrice: Int? = null,
+    val searchPrice: Int? = null,
     val updatedAt: Long
 )

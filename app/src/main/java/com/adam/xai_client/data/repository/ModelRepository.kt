@@ -37,16 +37,18 @@ class ModelRepository(
     }
 
     private suspend fun upsertModelsPreservingEnabled(models: List<AiModel>) {
-        val enabledById = aiModelDao.getModels().associate { it.id to it.isEnabledForChat }
+        val existingById = aiModelDao.getModels().associateBy { it.id }
         val now = System.currentTimeMillis()
         aiModelDao.upsertModels(
             models.map { model ->
-                AiModelEntity(
-                    id = model.id,
-                    name = model.name.ifBlank { model.id },
-                    isEnabledForChat = enabledById[model.id] ?: model.isEnabledForChat,
-                    updatedAt = now
-                )
+                val existing = existingById[model.id]?.asDomain()
+                model.withFallbackMetadata(existing)
+                    .copy(
+                        name = model.name.ifBlank { model.id },
+                        isEnabledForChat = existingById[model.id]?.isEnabledForChat
+                            ?: model.isEnabledForChat
+                    )
+                    .asEntity(updatedAt = now)
             }
         )
     }
@@ -67,4 +69,21 @@ class ModelRepository(
         AiModel(id = "grok-imagine-image-quality", name = "grok-imagine-image-quality"),
         AiModel(id = "grok-imagine-image-pro", name = "grok-imagine-image-pro")
     )
+
+    private fun AiModel.withFallbackMetadata(fallback: AiModel?): AiModel {
+        if (fallback == null) return this
+        return copy(
+            aliases = aliases.ifEmpty { fallback.aliases },
+            fingerprint = fingerprint ?: fallback.fingerprint,
+            version = version ?: fallback.version,
+            inputModalities = inputModalities.ifEmpty { fallback.inputModalities },
+            outputModalities = outputModalities.ifEmpty { fallback.outputModalities },
+            maxPromptLength = maxPromptLength ?: fallback.maxPromptLength,
+            promptTextTokenPrice = promptTextTokenPrice ?: fallback.promptTextTokenPrice,
+            cachedPromptTextTokenPrice = cachedPromptTextTokenPrice ?: fallback.cachedPromptTextTokenPrice,
+            completionTextTokenPrice = completionTextTokenPrice ?: fallback.completionTextTokenPrice,
+            promptImageTokenPrice = promptImageTokenPrice ?: fallback.promptImageTokenPrice,
+            searchPrice = searchPrice ?: fallback.searchPrice
+        )
+    }
 }

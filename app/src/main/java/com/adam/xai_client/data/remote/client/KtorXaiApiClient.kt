@@ -8,6 +8,7 @@ import com.adam.xai_client.data.remote.dto.ImageEditRequestDto
 import com.adam.xai_client.data.remote.dto.ImageGenerationRequestDto
 import com.adam.xai_client.data.remote.dto.ImageReferenceDto
 import com.adam.xai_client.data.remote.dto.ImageResponseDto
+import com.adam.xai_client.data.remote.dto.LanguageModelsResponseDto
 import com.adam.xai_client.data.remote.dto.ModelsResponseDto
 import com.adam.xai_client.data.remote.dto.ResponsesResponseDto
 import com.adam.xai_client.data.remote.dto.ResponsesStreamEventDto
@@ -39,6 +40,7 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.utils.io.readUTF8Line
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.JsonElement
@@ -71,13 +73,23 @@ class KtorXaiApiClient(
     }
 
     override suspend fun getModels(apiKey: String, baseUrl: String): List<AiModel> {
+        try {
+            val response = httpClient.get(endpoint(baseUrl, "/language-models")) {
+                bearerAuth(apiKey)
+            }
+            response.ensureSuccess()
+            return response.body<LanguageModelsResponseDto>().models.map { it.asDomain() }
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: Exception) {
+            // Fall back to the legacy minimal endpoint for custom/older xAI-compatible gateways.
+        }
+
         val response = httpClient.get(endpoint(baseUrl, "/models")) {
             bearerAuth(apiKey)
         }
         response.ensureSuccess()
-        return response.body<ModelsResponseDto>().data.map { dto ->
-            AiModel(id = dto.id, name = dto.id)
-        }
+        return response.body<ModelsResponseDto>().data.map { it.asDomain() }
     }
 
     override suspend fun sendChatRequest(

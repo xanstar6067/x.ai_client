@@ -60,13 +60,35 @@ internal fun ImageMessageEntity.asDomain(): ImageChatMessage = ImageChatMessage(
 internal fun AiModelEntity.asDomain(): AiModel = AiModel(
     id = id,
     name = name,
-    isEnabledForChat = isEnabledForChat
+    isEnabledForChat = isEnabledForChat,
+    aliases = aliases.toStringList(),
+    fingerprint = fingerprint,
+    version = version,
+    inputModalities = inputModalities.toStringList(),
+    outputModalities = outputModalities.toStringList(),
+    maxPromptLength = maxPromptLength,
+    promptTextTokenPrice = promptTextTokenPrice,
+    cachedPromptTextTokenPrice = cachedPromptTextTokenPrice,
+    completionTextTokenPrice = completionTextTokenPrice,
+    promptImageTokenPrice = promptImageTokenPrice,
+    searchPrice = searchPrice
 )
 
 internal fun AiModel.asEntity(updatedAt: Long): AiModelEntity = AiModelEntity(
     id = id,
     name = name,
     isEnabledForChat = isEnabledForChat,
+    aliases = aliases.toStorageString(),
+    fingerprint = fingerprint,
+    version = version,
+    inputModalities = inputModalities.toStorageString(),
+    outputModalities = outputModalities.toStorageString(),
+    maxPromptLength = maxPromptLength,
+    promptTextTokenPrice = promptTextTokenPrice,
+    cachedPromptTextTokenPrice = cachedPromptTextTokenPrice,
+    completionTextTokenPrice = completionTextTokenPrice,
+    promptImageTokenPrice = promptImageTokenPrice,
+    searchPrice = searchPrice,
     updatedAt = updatedAt
 )
 
@@ -105,3 +127,18 @@ internal fun ChatModelSettings.asEntity(
     webSearchEnabled = webSearchEnabled,
     updatedAt = updatedAt
 )
+
+private fun String?.toStringList(): List<String> {
+    return this
+        ?.split("\n")
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+        .orEmpty()
+}
+
+private fun List<String>.toStorageString(): String? {
+    return map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(separator = "\n")
+}

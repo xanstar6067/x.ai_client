@@ -410,9 +410,12 @@ private fun ModelInfoDialog(
                     )
                     return@Column
                 }
-                LimitRow("Контекст", "${limits.contextWindowTokens} токенов")
+                LimitRow("Контекст", limits.contextWindowTokens?.let { "$it токенов" } ?: "Нет в ответе API")
                 LimitRow("Лимит запросов", limits.publicRateLimit)
                 LimitRow("Цена ввода", "${limits.inputPricePerMillion} / 1 млн токенов")
+                limits.cachedInputPricePerMillion?.let {
+                    LimitRow("Цена кэшированного ввода", "$it / 1 млн токенов")
+                }
                 LimitRow("Цена вывода", "${limits.outputPricePerMillion} / 1 млн токенов")
                 HorizontalDivider()
                 limits.notes.forEach { note ->

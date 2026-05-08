@@ -128,7 +128,7 @@ class ChatViewModel(
                 _uiState.update {
                     it.copy(
                         selectedModelId = selectedModelId,
-                        selectedModelLimits = XaiModelLimits.forModel(selectedModelId),
+                        selectedModelLimits = limitsForModelId(selectedModelId),
                         modelSettings = it.modelSettings.normalizedForModel(selectedModelId)
                     )
                 }
@@ -198,7 +198,7 @@ class ChatViewModel(
         _uiState.update {
             it.copy(
                 selectedModelId = modelId,
-                selectedModelLimits = XaiModelLimits.forModel(modelId),
+                selectedModelLimits = limitsForModelId(modelId),
                 modelSettings = it.modelSettings.normalizedForModel(modelId),
                 error = null
             )
@@ -390,7 +390,7 @@ class ChatViewModel(
 
     fun updateMaxTokens(maxTokens: Int?) {
         updateModelSettings { current ->
-            val limit = XaiModelLimits.forModel(_uiState.value.selectedModelId)?.contextWindowTokens
+            val limit = limitsForModelId(_uiState.value.selectedModelId)?.contextWindowTokens
             current.copy(maxTokens = maxTokens?.coerceIn(1, limit ?: 131_072))
         }
     }
@@ -468,7 +468,7 @@ class ChatViewModel(
         _uiState.update {
             it.copy(
                 availableModels = available,
-                selectedModelLimits = XaiModelLimits.forModel(selectedModelId)
+                selectedModelLimits = limitsForModelId(selectedModelId)
             )
         }
     }
@@ -494,7 +494,7 @@ class ChatViewModel(
     }
 
     private fun ChatModelSettings.normalizedForModel(modelId: String?): ChatModelSettings {
-        val limit = XaiModelLimits.forModel(modelId)?.contextWindowTokens
+        val limit = limitsForModelId(modelId)?.contextWindowTokens
         val isMultiAgent = modelId.isGrok420MultiAgent()
         return copy(
             maxTokens = maxTokens
@@ -515,6 +515,13 @@ class ChatViewModel(
 
     private fun String?.isGrok420MultiAgent(): Boolean {
         return orEmpty().lowercase().startsWith("grok-4.20-multi-agent")
+    }
+
+    private fun limitsForModelId(modelId: String?): ModelLimits? {
+        val model = modelId?.let { selected ->
+            latestModels.firstOrNull { it.id == selected || selected in it.aliases }
+        }
+        return XaiModelLimits.forModel(model) ?: XaiModelLimits.forModel(modelId)
     }
 
     companion object {
