@@ -116,9 +116,9 @@ fun MessageBubble(
                         }
                     }
                     if (visibleContent.isNotBlank()) {
-                        Text(
-                            text = visibleContent,
-                            style = MaterialTheme.typography.bodyLarge
+                        MarkdownText(
+                            markdown = visibleContent,
+                            color = textColor
                         )
                     }
                     Row(
@@ -276,9 +276,8 @@ private fun ReasoningBlock(
             }
         }
         if (isExpanded) {
-            Text(
-                text = reasoning,
-                style = MaterialTheme.typography.bodySmall,
+            MarkdownText(
+                markdown = reasoning,
                 color = textColor.copy(alpha = 0.78f)
             )
         }

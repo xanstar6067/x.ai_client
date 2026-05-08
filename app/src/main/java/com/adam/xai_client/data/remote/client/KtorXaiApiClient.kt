@@ -87,7 +87,7 @@ class KtorXaiApiClient(
         messages: List<ApiChatMessage>,
         modelSettings: ChatModelSettings
     ): String {
-        if (modelId.usesResponsesApi()) {
+        if (modelId.usesResponsesApi() || modelSettings.webSearchEnabled) {
             return sendResponsesRequest(
                 apiKey = apiKey,
                 baseUrl = baseUrl,
@@ -125,7 +125,7 @@ class KtorXaiApiClient(
         messages: List<ApiChatMessage>,
         modelSettings: ChatModelSettings
     ): Flow<ChatStreamDelta> {
-        return if (modelId.usesResponsesApi()) {
+        return if (modelId.usesResponsesApi() || modelSettings.webSearchEnabled) {
             streamResponsesRequest(
                 apiKey = apiKey,
                 baseUrl = baseUrl,

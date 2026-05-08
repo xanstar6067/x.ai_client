@@ -30,7 +30,7 @@ import com.adam.xai_client.data.local.entity.ModelRoleEntity
         ImageChatEntity::class,
         ImageMessageEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -125,6 +125,12 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_image_messages_parentMessageId ON image_messages(parentMessageId)")
                 linkLinearHistory(db, "messages")
                 linkLinearHistory(db, "image_messages")
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat_model_settings ADD COLUMN webSearchEnabled INTEGER NOT NULL DEFAULT 0")
             }
         }
 

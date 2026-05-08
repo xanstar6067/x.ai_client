@@ -77,6 +77,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 onPresencePenaltyChange = viewModel::updatePresencePenalty,
                 onReasoningEffortChange = viewModel::updateReasoningEffort,
                 onContextMessageLimitChange = viewModel::updateContextMessageLimit,
+                onWebSearchEnabledChange = viewModel::updateWebSearchEnabled,
                 onResetModelSettings = viewModel::resetModelSettings,
                 onBack = { navController.popBackStack() },
                 onErrorShown = viewModel::clearError
@@ -113,6 +114,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 onPresencePenaltyChange = viewModel::updatePresencePenalty,
                 onReasoningEffortChange = viewModel::updateReasoningEffort,
                 onContextMessageLimitChange = viewModel::updateContextMessageLimit,
+                onWebSearchEnabledChange = viewModel::updateWebSearchEnabled,
                 onResetModelSettings = viewModel::resetModelSettings,
                 onBack = { navController.popBackStack() },
                 onErrorShown = viewModel::clearError

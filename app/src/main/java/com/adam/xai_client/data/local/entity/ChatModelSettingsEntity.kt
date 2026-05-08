@@ -26,5 +26,6 @@ data class ChatModelSettingsEntity(
     val presencePenalty: Double? = null,
     val reasoningEffort: ReasoningEffort? = null,
     val contextMessageLimit: Int = 0,
+    val webSearchEnabled: Boolean = false,
     val updatedAt: Long
 )

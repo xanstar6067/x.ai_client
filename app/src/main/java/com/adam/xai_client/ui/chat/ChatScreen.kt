@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -25,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -88,6 +88,7 @@ fun ChatScreen(
     onPresencePenaltyChange: (Double?) -> Unit,
     onReasoningEffortChange: (ReasoningEffort?) -> Unit,
     onContextMessageLimitChange: (Int) -> Unit,
+    onWebSearchEnabledChange: (Boolean) -> Unit,
     onResetModelSettings: () -> Unit,
     onBack: () -> Unit,
     onErrorShown: () -> Unit
@@ -113,11 +114,22 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = if (state.chatId == null) "Новый чат" else "Чат",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = if (state.chatId == null) "Новый чат" else "Чат",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        TokenSummaryInline(
+                            chatTokenCount = state.chatTokenCount,
+                            inputTokenCount = state.inputTokenCount
+                        )
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -157,10 +169,6 @@ fun ChatScreen(
             if (state.isSending) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
-            TokenSummaryBar(
-                chatTokenCount = state.chatTokenCount,
-                inputTokenCount = state.inputTokenCount
-            )
             if (state.messages.isEmpty()) {
                 Column(
                     modifier = Modifier
@@ -217,8 +225,10 @@ fun ChatScreen(
             ChatInput(
                 inputText = state.inputText,
                 inputTokenCount = state.inputTokenCount,
+                webSearchEnabled = state.modelSettings.webSearchEnabled,
                 isSending = state.isSending,
                 onInputChange = onInputChange,
+                onWebSearchEnabledChange = onWebSearchEnabledChange,
                 onSend = onSend
             )
         }
@@ -251,27 +261,17 @@ fun ChatScreen(
 }
 
 @Composable
-private fun TokenSummaryBar(
+private fun TokenSummaryInline(
     chatTokenCount: Int,
     inputTokenCount: Int
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        Text(
-            text = "Чат: $chatTokenCount",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = "Ввод: $inputTokenCount ток. | Всего: ${chatTokenCount + inputTokenCount} ток.",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
+    Text(
+        text = "чат $chatTokenCount | ввод $inputTokenCount | всего ${chatTokenCount + inputTokenCount}",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+    )
 }
 
 @Composable
@@ -315,8 +315,10 @@ private fun ChatSelectors(
 private fun ChatInput(
     inputText: String,
     inputTokenCount: Int,
+    webSearchEnabled: Boolean,
     isSending: Boolean,
     onInputChange: (String) -> Unit,
+    onWebSearchEnabledChange: (Boolean) -> Unit,
     onSend: () -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -340,24 +342,40 @@ private fun ChatInput(
             label = { Text("Сообщение") },
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.Sentences,
-                imeAction = ImeAction.Send
-            ),
-            keyboardActions = KeyboardActions(
-                onSend = {
-                    if (!isSending && inputText.isNotBlank()) {
-                        sendAndHideKeyboard()
-                    }
-                }
+                imeAction = ImeAction.Default
             ),
             minLines = 1,
             maxLines = 6
         )
-        IconButton(
-            onClick = sendAndHideKeyboard,
-            enabled = !isSending && inputText.isNotBlank(),
-            modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
+        Column(
+            modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
+            IconButton(
+                onClick = { onWebSearchEnabledChange(!webSearchEnabled) },
+                enabled = !isSending
+            ) {
+                Icon(
+                    Icons.Filled.Search,
+                    contentDescription = if (webSearchEnabled) {
+                        "Отключить веб-поиск"
+                    } else {
+                        "Включить веб-поиск"
+                    },
+                    tint = if (webSearchEnabled) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+            IconButton(
+                onClick = sendAndHideKeyboard,
+                enabled = !isSending && inputText.isNotBlank()
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
+            }
         }
     }
 }

@@ -443,6 +443,12 @@ class ChatViewModel(
         }
     }
 
+    fun updateWebSearchEnabled(enabled: Boolean) {
+        updateModelSettings { current ->
+            current.copy(webSearchEnabled = enabled)
+        }
+    }
+
     fun resetModelSettings() {
         updateModelSettings { ChatModelSettings(chatId = it.chatId) }
     }
@@ -497,7 +503,8 @@ class ChatViewModel(
             frequencyPenalty = frequencyPenalty.takeUnless { isMultiAgent },
             presencePenalty = presencePenalty.takeUnless { isMultiAgent },
             reasoningEffort = reasoningEffort.takeIf { modelId.supportsReasoningEffort() },
-            contextMessageLimit = contextMessageLimit.coerceIn(0, 99)
+            contextMessageLimit = contextMessageLimit.coerceIn(0, 99),
+            webSearchEnabled = webSearchEnabled
         )
     }
 

@@ -86,7 +86,8 @@ internal fun ChatModelSettingsEntity.asDomain(): ChatModelSettings = ChatModelSe
     frequencyPenalty = frequencyPenalty,
     presencePenalty = presencePenalty,
     reasoningEffort = reasoningEffort,
-    contextMessageLimit = contextMessageLimit
+    contextMessageLimit = contextMessageLimit,
+    webSearchEnabled = webSearchEnabled
 )
 
 internal fun ChatModelSettings.asEntity(
@@ -101,5 +102,6 @@ internal fun ChatModelSettings.asEntity(
     presencePenalty = presencePenalty,
     reasoningEffort = reasoningEffort,
     contextMessageLimit = contextMessageLimit,
+    webSearchEnabled = webSearchEnabled,
     updatedAt = updatedAt
 )

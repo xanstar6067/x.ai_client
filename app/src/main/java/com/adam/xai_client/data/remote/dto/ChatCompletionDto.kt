@@ -21,6 +21,8 @@ data class ChatCompletionRequestDto(
     val presencePenalty: Double? = null,
     @SerialName("reasoning_effort")
     val reasoningEffort: String? = null,
+    @SerialName("search_parameters")
+    val searchParameters: SearchParametersDto? = null,
     @SerialName("stream_options")
     val streamOptions: StreamOptionsDto? = null
 )
@@ -36,13 +38,26 @@ data class ResponsesRequestDto(
     @SerialName("top_p")
     val topP: Double? = null,
     val reasoning: ResponsesReasoningDto? = null,
+    val tools: List<ResponsesToolDto>? = null,
     @SerialName("stream_options")
     val streamOptions: StreamOptionsDto? = null
 )
 
 @Serializable
+data class SearchParametersDto(
+    val mode: String = "auto",
+    @SerialName("return_citations")
+    val returnCitations: Boolean = true
+)
+
+@Serializable
 data class ResponsesReasoningDto(
     val effort: String
+)
+
+@Serializable
+data class ResponsesToolDto(
+    val type: String
 )
 
 @Serializable
@@ -66,6 +81,7 @@ fun chatCompletionRequestDto(
     frequencyPenalty = settings.frequencyPenalty,
     presencePenalty = settings.presencePenalty,
     reasoningEffort = settings.reasoningEffort?.apiName,
+    searchParameters = SearchParametersDto().takeIf { settings.webSearchEnabled },
     streamOptions = StreamOptionsDto(includeUsage = true).takeIf { stream }
 )
 
@@ -82,6 +98,7 @@ fun responsesRequestDto(
     temperature = settings.temperature,
     topP = settings.topP,
     reasoning = settings.reasoningEffort?.let { ResponsesReasoningDto(it.apiName) },
+    tools = listOf(ResponsesToolDto(type = "web_search")).takeIf { settings.webSearchEnabled },
     streamOptions = StreamOptionsDto(includeUsage = true).takeIf { stream }
 )
 
