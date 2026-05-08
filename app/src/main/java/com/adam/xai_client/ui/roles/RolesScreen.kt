@@ -229,7 +229,7 @@ private fun RoleEditorDialog(
                 OutlinedTextField(
                     value = state.prompt,
                     onValueChange = { onStateChange(state.copy(prompt = it)) },
-                    label = { Text("Prompt") },
+                    label = { Text("Промпт") },
                     minLines = 4,
                     modifier = Modifier.fillMaxWidth()
                 )

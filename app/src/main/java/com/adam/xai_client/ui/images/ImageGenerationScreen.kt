@@ -167,7 +167,7 @@ fun ImageGenerationScreen(
                     onClick = onNewChat,
                     modifier = Modifier.navigationBarsPadding()
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Новый image-чат")
+                    Icon(Icons.Default.Add, contentDescription = "Новый чат изображений")
                 }
             }
         }
@@ -635,13 +635,13 @@ private fun ImageMessageCard(
                         onClick = onPreviousVersion,
                         enabled = !isGenerating
                     ) {
-                        Icon(Icons.Default.ChevronLeft, contentDescription = "Previous version")
+                        Icon(Icons.Default.ChevronLeft, contentDescription = "Предыдущая версия")
                     }
                     IconButton(
                         onClick = onNextVersion,
                         enabled = !isGenerating
                     ) {
-                        Icon(Icons.Default.ChevronRight, contentDescription = "Next version")
+                        Icon(Icons.Default.ChevronRight, contentDescription = "Следующая версия")
                     }
                 }
                 if (message.content.isNotBlank()) {
@@ -665,7 +665,7 @@ private fun ImageMessageCard(
                         onClick = onRegenerate,
                         enabled = !isGenerating
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Regenerate")
+                        Icon(Icons.Default.Refresh, contentDescription = "Сгенерировать заново")
                     }
                 }
                 IconButton(

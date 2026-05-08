@@ -102,7 +102,7 @@ fun SettingsScreen(
                 value = state.baseUrl,
                 onValueChange = onBaseUrlChange,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Base URL") },
+                label = { Text("Базовый URL") },
                 singleLine = true
             )
             Row(

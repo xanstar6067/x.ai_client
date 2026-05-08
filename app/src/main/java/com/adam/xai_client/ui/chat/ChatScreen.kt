@@ -23,8 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.RestartAlt
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -105,6 +105,17 @@ fun ChatScreen(
     LaunchedEffect(state.messages.size) {
         if (state.messages.isNotEmpty()) {
             listState.animateScrollToItem(state.messages.lastIndex)
+        }
+    }
+
+    val observedWebSearchState = remember { androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(state.modelSettings.webSearchEnabled) {
+        val previous = observedWebSearchState.value
+        observedWebSearchState.value = state.modelSettings.webSearchEnabled
+        if (previous != null && previous != state.modelSettings.webSearchEnabled) {
+            snackbarHostState.showSnackbar(
+                if (state.modelSettings.webSearchEnabled) "Веб-поиск включен" else "Веб-поиск отключен"
+            )
         }
     }
 
@@ -266,7 +277,7 @@ private fun TokenSummaryInline(
     inputTokenCount: Int
 ) {
     Text(
-        text = "чат $chatTokenCount | ввод $inputTokenCount | всего ${chatTokenCount + inputTokenCount}",
+        text = "Ввод $inputTokenCount | Всего ${chatTokenCount + inputTokenCount}",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,
@@ -352,7 +363,7 @@ private fun ChatInput(
                     enabled = !isSending
                 ) {
                     Icon(
-                        Icons.Filled.Search,
+                        Icons.Filled.Public,
                         contentDescription = if (webSearchEnabled) {
                             "Отключить веб-поиск"
                         } else {
@@ -400,9 +411,9 @@ private fun ModelInfoDialog(
                     return@Column
                 }
                 LimitRow("Контекст", "${limits.contextWindowTokens} токенов")
-                LimitRow("Rate limit", limits.publicRateLimit)
-                LimitRow("Цена input", "${limits.inputPricePerMillion} / 1M tokens")
-                LimitRow("Цена output", "${limits.outputPricePerMillion} / 1M tokens")
+                LimitRow("Лимит запросов", limits.publicRateLimit)
+                LimitRow("Цена ввода", "${limits.inputPricePerMillion} / 1 млн токенов")
+                LimitRow("Цена вывода", "${limits.outputPricePerMillion} / 1 млн токенов")
                 HorizontalDivider()
                 limits.notes.forEach { note ->
                     Text("• $note", style = MaterialTheme.typography.bodySmall)
@@ -472,14 +483,14 @@ private fun ModelSettingsDialog(
                 )
                 if (isGrok420MultiAgent) {
                     DropdownSelector(
-                        label = "Agent count",
+                        label = "Количество агентов",
                         options = reasoningEffortOptions,
                         selectedOption = settings.reasoningEffort,
                         optionLabel = { effort ->
                             when {
                                 !isGrok420MultiAgent -> effort.label
-                                effort == ReasoningEffort.LOW || effort == ReasoningEffort.MEDIUM -> "4 agents"
-                                else -> "16 agents"
+                                effort == ReasoningEffort.LOW || effort == ReasoningEffort.MEDIUM -> "4 агента"
+                                else -> "16 агентов"
                             }
                         },
                         onOptionSelected = onReasoningEffortChange,
@@ -490,25 +501,25 @@ private fun ModelSettingsDialog(
                             if (isGrok420MultiAgent) {
                                 "Сбросить выбор агентов"
                             } else {
-                                "Сбросить reasoning effort"
+                                "Сбросить глубину рассуждения"
                             }
                         )
                     }
                 }
                 if (isGrok420MultiAgent) {
                     Text(
-                        text = "xAI maps 4 agents to reasoning.effort=low/medium and 16 agents to high/xhigh.",
+                        text = "xAI сопоставляет 4 агентов с reasoning.effort=low/medium, а 16 агентов - с high/xhigh.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "Max output tokens не поддерживается для multi-agent.",
+                        text = "Максимум токенов ответа не поддерживается для multi-agent.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     NumericTextSetting(
-                        label = "Max output tokens",
+                        label = "Максимум токенов ответа",
                         value = settings.maxTokens,
                         placeholder = "По умолчанию API",
                         onValueChange = onMaxTokensChange,
@@ -516,7 +527,7 @@ private fun ModelSettingsDialog(
                     )
                 }
                 SliderSetting(
-                    label = "Temperature",
+                    label = "Температура",
                     value = settings.temperature,
                     defaultValue = 1.0,
                     valueRange = 0f..2f,
@@ -533,7 +544,7 @@ private fun ModelSettingsDialog(
                 )
                 if (!isGrok420MultiAgent) {
                     SliderSetting(
-                        label = "Frequency penalty",
+                        label = "Штраф частоты",
                         value = settings.frequencyPenalty,
                         defaultValue = 0.0,
                         valueRange = -2f..2f,
@@ -541,7 +552,7 @@ private fun ModelSettingsDialog(
                         onValueChange = onFrequencyPenaltyChange
                     )
                     SliderSetting(
-                        label = "Presence penalty",
+                        label = "Штраф присутствия",
                         value = settings.presencePenalty,
                         defaultValue = 0.0,
                         valueRange = -2f..2f,
@@ -551,21 +562,21 @@ private fun ModelSettingsDialog(
                 }
                 if (supportsReasoningEffort && !isGrok420MultiAgent) {
                     DropdownSelector(
-                        label = if (isGrok420MultiAgent) "Agent setup" else "Reasoning effort",
+                        label = if (isGrok420MultiAgent) "Настройка агентов" else "Глубина рассуждения",
                         options = reasoningEffortOptions,
                         selectedOption = settings.reasoningEffort,
                         optionLabel = { effort ->
                             when {
                                 !isGrok420MultiAgent -> effort.label
-                                effort == ReasoningEffort.LOW || effort == ReasoningEffort.MEDIUM -> "${effort.label} - 4 agents"
-                                else -> "${effort.label} - 16 agents"
+                                effort == ReasoningEffort.LOW || effort == ReasoningEffort.MEDIUM -> "${effort.label} - 4 агента"
+                                else -> "${effort.label} - 16 агентов"
                             }
                         },
                         onOptionSelected = onReasoningEffortChange,
                         modifier = Modifier.fillMaxWidth()
                     )
                     TextButton(onClick = { onReasoningEffortChange(null) }) {
-                        Text("Сбросить reasoning effort")
+                        Text("Сбросить глубину рассуждения")
                     }
                 }
             }
