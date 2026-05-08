@@ -124,7 +124,30 @@ class ChatRepository(
     }
 
     suspend fun deleteMessage(messageId: Long) {
-        messageDao.deleteMessageById(messageId)
+        database.withTransaction {
+            val message = messageDao.getMessage(messageId) ?: return@withTransaction
+            val children = messageDao.getChildMessages(messageId)
+            val replacementChildId = message.activeChildMessageId
+                ?.takeIf { activeChildId -> children.any { it.id == activeChildId } }
+                ?: children.firstOrNull()?.id
+                ?: message.parentMessageId?.let { parentId ->
+                    messageDao.getChildMessages(parentId)
+                        .firstOrNull { it.id != messageId }
+                        ?.id
+                }
+
+            messageDao.updateParentForChildren(
+                oldParentMessageId = messageId,
+                parentMessageId = message.parentMessageId
+            )
+            message.parentMessageId?.let { parentId ->
+                val parent = messageDao.getMessage(parentId)
+                if (parent?.activeChildMessageId == messageId) {
+                    messageDao.updateActiveChild(parentId, replacementChildId)
+                }
+            }
+            messageDao.deleteMessageById(messageId)
+        }
     }
 
     suspend fun deleteMessages(messageIds: List<Long>) {

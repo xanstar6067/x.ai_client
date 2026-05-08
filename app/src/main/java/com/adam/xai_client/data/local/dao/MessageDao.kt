@@ -18,6 +18,9 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE id = :messageId")
     suspend fun getMessage(messageId: Long): MessageEntity?
 
+    @Query("SELECT * FROM messages WHERE parentMessageId = :parentMessageId ORDER BY createdAt ASC, id ASC")
+    suspend fun getChildMessages(parentMessageId: Long): List<MessageEntity>
+
     @Query("SELECT * FROM messages ORDER BY chatId ASC, createdAt ASC, id ASC")
     suspend fun getAllMessages(): List<MessageEntity>
 
@@ -37,6 +40,9 @@ interface MessageDao {
 
     @Query("UPDATE messages SET activeChildMessageId = :activeChildMessageId WHERE id = :messageId")
     suspend fun updateActiveChild(messageId: Long, activeChildMessageId: Long?)
+
+    @Query("UPDATE messages SET parentMessageId = :parentMessageId WHERE parentMessageId = :oldParentMessageId")
+    suspend fun updateParentForChildren(oldParentMessageId: Long, parentMessageId: Long?)
 
     @Query("DELETE FROM messages WHERE id = :messageId")
     suspend fun deleteMessageById(messageId: Long)

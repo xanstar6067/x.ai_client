@@ -94,7 +94,30 @@ class ImageRepository(
     }
 
     suspend fun deleteMessage(messageId: Long) {
-        imageMessageDao.deleteMessageById(messageId)
+        database.withTransaction {
+            val message = imageMessageDao.getMessage(messageId) ?: return@withTransaction
+            val children = imageMessageDao.getChildMessages(messageId)
+            val replacementChildId = message.activeChildMessageId
+                ?.takeIf { activeChildId -> children.any { it.id == activeChildId } }
+                ?: children.firstOrNull()?.id
+                ?: message.parentMessageId?.let { parentId ->
+                    imageMessageDao.getChildMessages(parentId)
+                        .firstOrNull { it.id != messageId }
+                        ?.id
+                }
+
+            imageMessageDao.updateParentForChildren(
+                oldParentMessageId = messageId,
+                parentMessageId = message.parentMessageId
+            )
+            message.parentMessageId?.let { parentId ->
+                val parent = imageMessageDao.getMessage(parentId)
+                if (parent?.activeChildMessageId == messageId) {
+                    imageMessageDao.updateActiveChild(parentId, replacementChildId)
+                }
+            }
+            imageMessageDao.deleteMessageById(messageId)
+        }
     }
 
     suspend fun updateUserMessageText(messageId: Long, content: String) {

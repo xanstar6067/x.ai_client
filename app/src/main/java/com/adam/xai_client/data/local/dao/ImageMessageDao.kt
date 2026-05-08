@@ -21,6 +21,9 @@ interface ImageMessageDao {
     @Query("SELECT * FROM image_messages WHERE id = :messageId")
     suspend fun getMessage(messageId: Long): ImageMessageEntity?
 
+    @Query("SELECT * FROM image_messages WHERE parentMessageId = :parentMessageId ORDER BY createdAt ASC, id ASC")
+    suspend fun getChildMessages(parentMessageId: Long): List<ImageMessageEntity>
+
     @Insert
     suspend fun insertMessage(message: ImageMessageEntity): Long
 
@@ -32,6 +35,9 @@ interface ImageMessageDao {
 
     @Query("UPDATE image_messages SET activeChildMessageId = :activeChildMessageId WHERE id = :messageId")
     suspend fun updateActiveChild(messageId: Long, activeChildMessageId: Long?)
+
+    @Query("UPDATE image_messages SET parentMessageId = :parentMessageId WHERE parentMessageId = :oldParentMessageId")
+    suspend fun updateParentForChildren(oldParentMessageId: Long, parentMessageId: Long?)
 
     @Query("DELETE FROM image_messages WHERE id = :messageId")
     suspend fun deleteMessageById(messageId: Long)
