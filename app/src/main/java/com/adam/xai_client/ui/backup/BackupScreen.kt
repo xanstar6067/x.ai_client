@@ -1,5 +1,11 @@
 package com.adam.xai_client.ui.backup
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.os.Environment
+import android.provider.DocumentsContract
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -13,10 +19,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -24,11 +32,11 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.ui.components.TransientSnackbar
@@ -42,6 +50,7 @@ fun BackupScreen(
     onBack: () -> Unit,
     onMessageShown: () -> Unit
 ) {
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -59,10 +68,10 @@ fun BackupScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Backups") },
+                title = { Text("Резервное копирование и восстановление") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 }
             )
@@ -77,8 +86,15 @@ fun BackupScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Export chats to Downloads/xAI Chat Backups or restore them from a selected backup file.",
+                text = "Создайте резервную копию чатов или восстановите данные из выбранного файла.",
                 style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Путь для сохранений: $BACKUP_FOLDER_PATH",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(24.dp))
@@ -93,7 +109,7 @@ fun BackupScreen(
                 ) {
                     Icon(Icons.Default.FileUpload, contentDescription = null)
                     Spacer(modifier = Modifier.padding(4.dp))
-                    Text("Export")
+                    Text("Экспорт")
                 }
                 Button(
                     onClick = { importLauncher.launch(arrayOf("application/json", "text/*")) },
@@ -102,13 +118,42 @@ fun BackupScreen(
                 ) {
                     Icon(Icons.Default.Restore, contentDescription = null)
                     Spacer(modifier = Modifier.padding(4.dp))
-                    Text("Import")
+                    Text("Импорт")
                 }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = { openBackupFolder(context) },
+                enabled = !state.isBusy,
+                modifier = Modifier.fillMaxWidth(0.5f)
+            ) {
+                Icon(Icons.Default.FolderOpen, contentDescription = null)
+                Spacer(modifier = Modifier.padding(4.dp))
+                Text("Папка")
             }
             if (state.isBusy) {
                 Spacer(modifier = Modifier.height(24.dp))
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
         }
+    }
+}
+
+private const val BACKUP_DIR = "xAI Chat Backups"
+private const val BACKUP_FOLDER_PATH = "Downloads/$BACKUP_DIR"
+
+private fun openBackupFolder(context: android.content.Context) {
+    val folderUri: Uri = DocumentsContract.buildDocumentUri(
+        "com.android.externalstorage.documents",
+        "primary:${Environment.DIRECTORY_DOWNLOADS}/$BACKUP_DIR"
+    )
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(folderUri, DocumentsContract.Document.MIME_TYPE_DIR)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    try {
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, "Не удалось открыть проводник.", Toast.LENGTH_SHORT).show()
     }
 }

@@ -84,7 +84,7 @@ fun ChatListScreen(
                         Icon(Icons.Default.Psychology, contentDescription = "Роли")
                     }
                     IconButton(onClick = onOpenBackups) {
-                        Icon(Icons.Default.Backup, contentDescription = "Backups")
+                        Icon(Icons.Default.Backup, contentDescription = "Резервное копирование и восстановление")
                     }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Настройки")

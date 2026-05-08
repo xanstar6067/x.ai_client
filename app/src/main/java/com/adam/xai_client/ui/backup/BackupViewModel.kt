@@ -35,7 +35,7 @@ class BackupViewModel(
                     _uiState.update {
                         it.copy(
                             isBusy = false,
-                            message = "Backup exported to Downloads/xAI Chat Backups.",
+                            message = "Резервная копия сохранена в Downloads/xAI Chat Backups.",
                             error = null
                         )
                     }
@@ -56,7 +56,7 @@ class BackupViewModel(
                     _uiState.update {
                         it.copy(
                             isBusy = false,
-                            message = "Imported ${summary.chatCount} chats and ${summary.imageChatCount} image chats.",
+                            message = "Восстановлено чатов: ${summary.chatCount}, чатов с изображениями: ${summary.imageChatCount}.",
                             error = null
                         )
                     }
