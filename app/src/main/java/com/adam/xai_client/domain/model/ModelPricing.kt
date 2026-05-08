@@ -12,5 +12,5 @@ fun Int.toUsdPerMillionTokens(): String {
 }
 
 fun Int.toUsdPerImage(): String {
-    return "$" + String.format(Locale.US, "%.2f", this / 1_000_000.0)
+    return "$" + String.format(Locale.US, "%.2f", this / 10_000_000_000.0)
 }
