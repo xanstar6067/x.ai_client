@@ -79,6 +79,7 @@ import com.adam.xai_client.domain.model.GeneratedImage
 import com.adam.xai_client.domain.model.ImageChat
 import com.adam.xai_client.domain.model.ImageChatMessage
 import com.adam.xai_client.domain.model.MessageRole
+import com.adam.xai_client.domain.model.toUsdPerImage
 import com.adam.xai_client.ui.components.DropdownSelector
 import com.adam.xai_client.ui.components.TransientSnackbar
 import java.text.DateFormat
@@ -430,7 +431,11 @@ private fun ImageChatControls(
             label = if (state.imageModels.isEmpty()) "Нет image-моделей" else "Модель",
             options = state.imageModels,
             selectedOption = state.imageModels.firstOrNull { it.id == state.selectedModelId },
-            optionLabel = { it.name.ifBlank { it.id } },
+            optionLabel = { model ->
+                model.imagePrice?.let { price ->
+                    "${model.name.ifBlank { model.id }} (${price.toUsdPerImage()} / image)"
+                } ?: model.name.ifBlank { model.id }
+            },
             onOptionSelected = { onModelSelected(it.id) },
             modifier = Modifier.fillMaxWidth()
         )

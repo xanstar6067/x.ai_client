@@ -5,6 +5,7 @@ import com.adam.xai_client.data.remote.api.ChatStreamDelta
 import com.adam.xai_client.data.remote.dto.ApiChatMessage
 import com.adam.xai_client.data.remote.dto.ChatCompletionResponseDto
 import com.adam.xai_client.data.remote.dto.ImageEditRequestDto
+import com.adam.xai_client.data.remote.dto.ImageGenerationModelsResponseDto
 import com.adam.xai_client.data.remote.dto.ImageGenerationRequestDto
 import com.adam.xai_client.data.remote.dto.ImageReferenceDto
 import com.adam.xai_client.data.remote.dto.ImageResponseDto
@@ -73,23 +74,36 @@ class KtorXaiApiClient(
     }
 
     override suspend fun getModels(apiKey: String, baseUrl: String): List<AiModel> {
-        try {
+        val textModels = try {
             val response = httpClient.get(endpoint(baseUrl, "/language-models")) {
                 bearerAuth(apiKey)
             }
             response.ensureSuccess()
-            return response.body<LanguageModelsResponseDto>().models.map { it.asDomain() }
+            response.body<LanguageModelsResponseDto>().models.map { it.asDomain() }
         } catch (exception: CancellationException) {
             throw exception
         } catch (_: Exception) {
             // Fall back to the legacy minimal endpoint for custom/older xAI-compatible gateways.
+            val response = httpClient.get(endpoint(baseUrl, "/models")) {
+                bearerAuth(apiKey)
+            }
+            response.ensureSuccess()
+            response.body<ModelsResponseDto>().data.map { it.asDomain() }
         }
 
-        val response = httpClient.get(endpoint(baseUrl, "/models")) {
-            bearerAuth(apiKey)
+        val imageModels = try {
+            val response = httpClient.get(endpoint(baseUrl, "/image-generation-models")) {
+                bearerAuth(apiKey)
+            }
+            response.ensureSuccess()
+            response.body<ImageGenerationModelsResponseDto>().models.map { it.asDomain() }
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: Exception) {
+            emptyList()
         }
-        response.ensureSuccess()
-        return response.body<ModelsResponseDto>().data.map { it.asDomain() }
+
+        return (textModels + imageModels).mergeModelsById()
     }
 
     override suspend fun sendChatRequest(
@@ -400,6 +414,30 @@ class KtorXaiApiClient(
 
     private fun ChatModelSettings.forResponsesApi(modelId: String): ChatModelSettings {
         return if (modelId.usesResponsesApi()) copy(maxTokens = null) else this
+    }
+
+    private fun List<AiModel>.mergeModelsById(): List<AiModel> {
+        return groupBy { it.id }
+            .values
+            .map { models -> models.reduce { accumulated, next -> accumulated.mergeWith(next) } }
+    }
+
+    private fun AiModel.mergeWith(other: AiModel): AiModel {
+        return copy(
+            name = name.ifBlank { other.name.ifBlank { id } },
+            aliases = (aliases + other.aliases).distinct(),
+            fingerprint = fingerprint ?: other.fingerprint,
+            version = version ?: other.version,
+            inputModalities = (inputModalities + other.inputModalities).distinct(),
+            outputModalities = (outputModalities + other.outputModalities).distinct(),
+            maxPromptLength = maxPromptLength ?: other.maxPromptLength,
+            promptTextTokenPrice = promptTextTokenPrice ?: other.promptTextTokenPrice,
+            cachedPromptTextTokenPrice = cachedPromptTextTokenPrice ?: other.cachedPromptTextTokenPrice,
+            completionTextTokenPrice = completionTextTokenPrice ?: other.completionTextTokenPrice,
+            promptImageTokenPrice = promptImageTokenPrice ?: other.promptImageTokenPrice,
+            searchPrice = searchPrice ?: other.searchPrice,
+            imagePrice = imagePrice ?: other.imagePrice
+        )
     }
 
     private suspend fun HttpResponse.ensureSuccess() {

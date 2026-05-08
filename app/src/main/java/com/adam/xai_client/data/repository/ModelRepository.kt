@@ -83,7 +83,8 @@ class ModelRepository(
             cachedPromptTextTokenPrice = cachedPromptTextTokenPrice ?: fallback.cachedPromptTextTokenPrice,
             completionTextTokenPrice = completionTextTokenPrice ?: fallback.completionTextTokenPrice,
             promptImageTokenPrice = promptImageTokenPrice ?: fallback.promptImageTokenPrice,
-            searchPrice = searchPrice ?: fallback.searchPrice
+            searchPrice = searchPrice ?: fallback.searchPrice,
+            imagePrice = imagePrice ?: fallback.imagePrice
         )
     }
 }

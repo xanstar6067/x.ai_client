@@ -417,6 +417,9 @@ private fun ModelInfoDialog(
                     LimitRow("Цена кэшированного ввода", "$it / 1 млн токенов")
                 }
                 LimitRow("Цена вывода", "${limits.outputPricePerMillion} / 1 млн токенов")
+                limits.imagePrice?.let {
+                    LimitRow("Цена изображения", "$it / изображение")
+                }
                 HorizontalDivider()
                 limits.notes.forEach { note ->
                     Text("• $note", style = MaterialTheme.typography.bodySmall)

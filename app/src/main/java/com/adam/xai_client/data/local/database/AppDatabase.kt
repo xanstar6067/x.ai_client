@@ -30,7 +30,7 @@ import com.adam.xai_client.data.local.entity.ModelRoleEntity
         ImageChatEntity::class,
         ImageMessageEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -147,6 +147,15 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE ai_models ADD COLUMN completionTextTokenPrice INTEGER")
                 db.execSQL("ALTER TABLE ai_models ADD COLUMN promptImageTokenPrice INTEGER")
                 db.execSQL("ALTER TABLE ai_models ADD COLUMN searchPrice INTEGER")
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN imagePrice INTEGER")
+            }
+        }
+
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                if (!db.hasColumn("ai_models", "imagePrice")) {
+                    db.execSQL("ALTER TABLE ai_models ADD COLUMN imagePrice INTEGER")
+                }
             }
         }
 
@@ -174,6 +183,16 @@ abstract class AppDatabase : RoomDatabase() {
                     previousMessageId = messageId
                 }
             }
+        }
+
+        private fun SupportSQLiteDatabase.hasColumn(tableName: String, columnName: String): Boolean {
+            query("PRAGMA table_info(`$tableName`)").use { cursor ->
+                val nameIndex = cursor.getColumnIndex("name")
+                while (cursor.moveToNext()) {
+                    if (cursor.getString(nameIndex) == columnName) return true
+                }
+            }
+            return false
         }
     }
 }

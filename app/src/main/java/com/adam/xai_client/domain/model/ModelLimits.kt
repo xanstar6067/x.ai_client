@@ -6,6 +6,7 @@ data class ModelLimits(
     val inputPricePerMillion: String,
     val cachedInputPricePerMillion: String? = null,
     val outputPricePerMillion: String,
+    val imagePrice: String? = null,
     val sourceLabel: String,
     val sourceUrl: String,
     val notes: List<String> = emptyList()
@@ -82,10 +83,10 @@ object XaiModelLimits {
         val fallback = forModel(model.id)
         val hasApiMetadata = model.hasApiMetadata()
         val contextWindowTokens = model.maxPromptLength ?: fallback?.contextWindowTokens
-        val inputPrice = model.promptTextTokenPrice?.toUsdPerMillion()
+        val inputPrice = model.promptTextTokenPrice?.toUsdPerMillionTokens()
             ?: fallback?.inputPricePerMillion
             ?: "unknown"
-        val outputPrice = model.completionTextTokenPrice?.toUsdPerMillion()
+        val outputPrice = model.completionTextTokenPrice?.toUsdPerMillionTokens()
             ?: fallback?.outputPricePerMillion
             ?: "unknown"
         val notes = buildList {
@@ -101,10 +102,13 @@ object XaiModelLimits {
             model.fingerprint?.let { add("Fingerprint: $it.") }
             model.version?.let { add("Version: $it.") }
             if (model.searchPrice != null) {
-                add("Search price: ${model.searchPrice.toUsdPerMillion()} / 1M searches.")
+                add("Search price: ${model.searchPrice.toUsdPerMillionTokens()} / 1M searches.")
             }
             if (model.promptImageTokenPrice != null) {
-                add("Image input price: ${model.promptImageTokenPrice.toUsdPerMillion()} / 1M tokens.")
+                add("Image input price: ${model.promptImageTokenPrice.toUsdPerMillionTokens()} / 1M tokens.")
+            }
+            if (model.imagePrice != null) {
+                add("Image generation price: ${model.imagePrice.toUsdPerImage()} per image.")
             }
             if (model.maxPromptLength == null && fallback != null) {
                 add("Context window comes from the built-in fallback because this API response did not include max_prompt_length.")
@@ -119,10 +123,15 @@ object XaiModelLimits {
             publicRateLimit = fallback?.publicRateLimit
                 ?: "Team-specific limits are available in xAI Console.",
             inputPricePerMillion = inputPrice,
-            cachedInputPricePerMillion = model.cachedPromptTextTokenPrice?.toUsdPerMillion()
+            cachedInputPricePerMillion = model.cachedPromptTextTokenPrice?.toUsdPerMillionTokens()
                 ?: fallback?.cachedInputPricePerMillion,
             outputPricePerMillion = outputPrice,
-            sourceLabel = if (hasApiMetadata) "xAI Language Models API" else fallback?.sourceLabel ?: "xAI API",
+            imagePrice = model.imagePrice?.toUsdPerImage() ?: fallback?.imagePrice,
+            sourceLabel = when {
+                model.imagePrice != null -> "xAI Image Generation Models API"
+                hasApiMetadata -> "xAI Language Models API"
+                else -> fallback?.sourceLabel ?: "xAI API"
+            },
             sourceUrl = if (hasApiMetadata) XAI_LANGUAGE_MODELS_URL else fallback?.sourceUrl ?: XAI_MODELS_URL,
             notes = notes.distinct()
         )
@@ -131,15 +140,6 @@ object XaiModelLimits {
     fun sourceForRateLimitDetails(): String = XAI_LIMITS_URL
 
     private const val XAI_LANGUAGE_MODELS_URL = "https://docs.x.ai/developers/rest-api-reference/inference/models"
-
-    private fun Int.toUsdPerMillion(): String {
-        val dollars = this / 10_000.0
-        return "$" + if (dollars < 1.0) {
-            String.format(java.util.Locale.US, "%.4f", dollars).trimEnd('0').trimEnd('.')
-        } else {
-            String.format(java.util.Locale.US, "%.2f", dollars)
-        }
-    }
 
     private fun AiModel.hasApiMetadata(): Boolean {
         return aliases.isNotEmpty() ||
@@ -152,6 +152,7 @@ object XaiModelLimits {
             cachedPromptTextTokenPrice != null ||
             completionTextTokenPrice != null ||
             promptImageTokenPrice != null ||
-            searchPrice != null
+            searchPrice != null ||
+            imagePrice != null
     }
 }

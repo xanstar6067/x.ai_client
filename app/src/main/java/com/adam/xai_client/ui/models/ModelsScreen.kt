@@ -32,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.AiModel
+import com.adam.xai_client.domain.model.toUsdPerImage
+import com.adam.xai_client.domain.model.toUsdPerMillionTokens
 import com.adam.xai_client.ui.components.TransientSnackbar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -148,11 +150,32 @@ private fun ModelRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                model.priceSummary()?.let { summary ->
+                    Text(
+                        text = summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             Switch(
                 checked = model.isEnabledForChat,
                 onCheckedChange = onToggle
             )
         }
+    }
+}
+
+private fun AiModel.priceSummary(): String? {
+    imagePrice?.let { return "${it.toUsdPerImage()} / изображение" }
+    val input = promptTextTokenPrice?.toUsdPerMillionTokens()
+    val output = completionTextTokenPrice?.toUsdPerMillionTokens()
+    return when {
+        input != null && output != null -> "Ввод $input | вывод $output / 1 млн токенов"
+        input != null -> "Ввод $input / 1 млн токенов"
+        output != null -> "Вывод $output / 1 млн токенов"
+        else -> null
     }
 }

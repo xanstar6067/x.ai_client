@@ -14,5 +14,6 @@ data class AiModel(
     val cachedPromptTextTokenPrice: Int? = null,
     val completionTextTokenPrice: Int? = null,
     val promptImageTokenPrice: Int? = null,
-    val searchPrice: Int? = null
+    val searchPrice: Int? = null,
+    val imagePrice: Int? = null
 )

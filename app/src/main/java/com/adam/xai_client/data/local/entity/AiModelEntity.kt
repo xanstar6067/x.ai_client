@@ -20,5 +20,6 @@ data class AiModelEntity(
     val completionTextTokenPrice: Int? = null,
     val promptImageTokenPrice: Int? = null,
     val searchPrice: Int? = null,
+    val imagePrice: Int? = null,
     val updatedAt: Long
 )

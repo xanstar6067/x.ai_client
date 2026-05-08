@@ -15,6 +15,11 @@ data class LanguageModelsResponseDto(
 )
 
 @Serializable
+data class ImageGenerationModelsResponseDto(
+    val models: List<ModelDto> = emptyList()
+)
+
+@Serializable
 data class ModelDto(
     val id: String,
     val aliases: List<String> = emptyList(),
@@ -35,7 +40,9 @@ data class ModelDto(
     @SerialName("prompt_image_token_price")
     val promptImageTokenPrice: Int? = null,
     @SerialName("search_price")
-    val searchPrice: Int? = null
+    val searchPrice: Int? = null,
+    @SerialName("image_price")
+    val imagePrice: Int? = null
 )
 
 fun ModelDto.asDomain(): AiModel = AiModel(
@@ -51,5 +58,6 @@ fun ModelDto.asDomain(): AiModel = AiModel(
     cachedPromptTextTokenPrice = cachedPromptTextTokenPrice,
     completionTextTokenPrice = completionTextTokenPrice,
     promptImageTokenPrice = promptImageTokenPrice,
-    searchPrice = searchPrice
+    searchPrice = searchPrice,
+    imagePrice = imagePrice
 )

@@ -71,7 +71,8 @@ internal fun AiModelEntity.asDomain(): AiModel = AiModel(
     cachedPromptTextTokenPrice = cachedPromptTextTokenPrice,
     completionTextTokenPrice = completionTextTokenPrice,
     promptImageTokenPrice = promptImageTokenPrice,
-    searchPrice = searchPrice
+    searchPrice = searchPrice,
+    imagePrice = imagePrice
 )
 
 internal fun AiModel.asEntity(updatedAt: Long): AiModelEntity = AiModelEntity(
@@ -89,6 +90,7 @@ internal fun AiModel.asEntity(updatedAt: Long): AiModelEntity = AiModelEntity(
     completionTextTokenPrice = completionTextTokenPrice,
     promptImageTokenPrice = promptImageTokenPrice,
     searchPrice = searchPrice,
+    imagePrice = imagePrice,
     updatedAt = updatedAt
 )
 
