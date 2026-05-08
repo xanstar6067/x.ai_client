@@ -13,6 +13,9 @@ interface ModelRoleDao {
     @Query("SELECT * FROM model_roles ORDER BY isBuiltIn DESC, name COLLATE NOCASE ASC")
     fun observeRoles(): Flow<List<ModelRoleEntity>>
 
+    @Query("SELECT * FROM model_roles ORDER BY id ASC")
+    suspend fun getAllRoles(): List<ModelRoleEntity>
+
     @Query("SELECT * FROM model_roles WHERE id = :roleId")
     suspend fun getRole(roleId: Long): ModelRoleEntity?
 
@@ -25,6 +28,9 @@ interface ModelRoleDao {
     @Insert
     suspend fun insertRole(role: ModelRoleEntity): Long
 
+    @Insert
+    suspend fun insertRoles(roles: List<ModelRoleEntity>)
+
     @Update
     suspend fun updateRole(role: ModelRoleEntity)
 
@@ -33,4 +39,7 @@ interface ModelRoleDao {
 
     @Query("UPDATE model_roles SET isDefault = CASE WHEN id = :roleId THEN 1 ELSE 0 END")
     suspend fun setDefaultRole(roleId: Long)
+
+    @Query("DELETE FROM model_roles")
+    suspend fun deleteAllRoles()
 }

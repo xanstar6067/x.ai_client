@@ -13,6 +13,7 @@ import com.adam.xai_client.data.local.entity.ChatModelSettingsEntity
 import com.adam.xai_client.data.local.entity.ImageChatEntity
 import com.adam.xai_client.data.local.entity.ImageMessageEntity
 import com.adam.xai_client.data.local.entity.MessageEntity
+import com.adam.xai_client.data.local.entity.ModelRoleEntity
 import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.ReasoningEffort
 import kotlinx.serialization.Serializable
@@ -41,6 +42,7 @@ class BackupRepository(
                 chats = database.chatDao().getAllChats().map { it.toBackup() },
                 messages = database.messageDao().getAllMessages().map { it.toBackup() },
                 chatModelSettings = database.chatModelSettingsDao().getAllSettings().map { it.toBackup() },
+                roles = database.modelRoleDao().getAllRoles().map { it.toBackup() },
                 imageChats = database.imageChatDao().getAllChats().map { it.toBackup() },
                 imageMessages = database.imageMessageDao().getAllMessages().map { it.toBackup() }
             )
@@ -65,6 +67,10 @@ class BackupRepository(
             database.chatModelSettingsDao().deleteAllSettings()
             database.chatDao().deleteAllChats()
             database.imageChatDao().deleteAllChats()
+            if (backup.roles.isNotEmpty()) {
+                database.modelRoleDao().deleteAllRoles()
+                database.modelRoleDao().insertRoles(backup.roles.map { it.toEntity() })
+            }
 
             database.chatDao().insertChats(backup.chats.map { it.toEntity() })
             database.imageChatDao().insertChats(backup.imageChats.map { it.toEntity() })
@@ -138,6 +144,7 @@ private data class ChatBackupDto(
     val chats: List<BackupChatDto>,
     val messages: List<BackupMessageDto>,
     val chatModelSettings: List<BackupChatModelSettingsDto>,
+    val roles: List<BackupModelRoleDto> = emptyList(),
     val imageChats: List<BackupImageChatDto>,
     val imageMessages: List<BackupImageMessageDto>
 )
@@ -176,6 +183,15 @@ private data class BackupChatModelSettingsDto(
     val reasoningEffort: String?,
     val contextMessageLimit: Int,
     val updatedAt: Long
+)
+
+@Serializable
+private data class BackupModelRoleDto(
+    val id: Long,
+    val name: String,
+    val prompt: String,
+    val isDefault: Boolean,
+    val isBuiltIn: Boolean
 )
 
 @Serializable
@@ -265,6 +281,22 @@ private fun BackupChatModelSettingsDto.toEntity(): ChatModelSettingsEntity = Cha
     reasoningEffort = reasoningEffort?.let { runCatching { ReasoningEffort.valueOf(it) }.getOrNull() },
     contextMessageLimit = contextMessageLimit,
     updatedAt = updatedAt
+)
+
+private fun ModelRoleEntity.toBackup(): BackupModelRoleDto = BackupModelRoleDto(
+    id = id,
+    name = name,
+    prompt = prompt,
+    isDefault = isDefault,
+    isBuiltIn = isBuiltIn
+)
+
+private fun BackupModelRoleDto.toEntity(): ModelRoleEntity = ModelRoleEntity(
+    id = id,
+    name = name,
+    prompt = prompt,
+    isDefault = isDefault,
+    isBuiltIn = isBuiltIn
 )
 
 private fun ImageChatEntity.toBackup(): BackupImageChatDto = BackupImageChatDto(
