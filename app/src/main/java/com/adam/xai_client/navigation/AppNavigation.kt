@@ -62,15 +62,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 onInputChange = viewModel::onInputChange,
                 onModelSelected = viewModel::onModelSelected,
                 onRoleSelected = viewModel::onRoleSelected,
-                onSend = {
-                    viewModel.sendMessage { chatId ->
-                        navController.navigate(Screen.Chat.route(chatId)) {
-                            popUpTo(Screen.NewChat.route) {
-                                inclusive = true
-                            }
-                        }
-                    }
-                },
+                onSend = viewModel::sendMessage,
                 onRegenerate = viewModel::regenerateResponse,
                 onResendMessage = viewModel::resendFromUserMessage,
                 onSwitchMessageVersion = viewModel::switchMessageVersion,
@@ -106,7 +98,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 onInputChange = viewModel::onInputChange,
                 onModelSelected = viewModel::onModelSelected,
                 onRoleSelected = viewModel::onRoleSelected,
-                onSend = { viewModel.sendMessage {} },
+                onSend = viewModel::sendMessage,
                 onRegenerate = viewModel::regenerateResponse,
                 onResendMessage = viewModel::resendFromUserMessage,
                 onSwitchMessageVersion = viewModel::switchMessageVersion,

@@ -231,9 +231,8 @@ class ChatViewModel(
         }
     }
 
-    fun sendMessage(onChatCreated: (Long) -> Unit) {
+    fun sendMessage() {
         viewModelScope.launch {
-            val beforeSendChatId = _uiState.value.chatId
             val outgoingText = _uiState.value.inputText
             _uiState.update { it.copy(isSending = true, error = null, inputText = "", inputTokenCount = 0) }
 
@@ -259,9 +258,6 @@ class ChatViewModel(
                         isSending = false,
                         error = null
                     )
-                }
-                if (beforeSendChatId == null) {
-                    onChatCreated(newChatId)
                 }
             }.onFailure { throwable ->
                 val failedChatId = (throwable as? MessageSendFailedException)?.chatId
