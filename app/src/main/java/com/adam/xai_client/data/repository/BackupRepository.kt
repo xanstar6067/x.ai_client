@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import androidx.room.withTransaction
 import com.adam.xai_client.data.local.database.AppDatabase
 import com.adam.xai_client.data.local.entity.ChatEntity
@@ -22,10 +23,15 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Base64
 import java.util.Date
 import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 class BackupRepository(
     private val context: Context,
@@ -38,36 +44,47 @@ class BackupRepository(
     }
 
     suspend fun exportBackup(): Uri {
-        val backup = database.withTransaction {
-            ChatBackupDto(
-                exportedAt = System.currentTimeMillis(),
-                chats = database.chatDao().getAllChats().map { it.toBackup() },
-                messages = database.messageDao().getAllMessages().map { it.toBackup() },
-                chatModelSettings = database.chatModelSettingsDao().getAllSettings().map { it.toBackup() },
-                roles = database.modelRoleDao().getAllRoles().map { it.toBackup() },
-                imageChats = database.imageChatDao().getAllChats().map { it.toBackup() },
-                imageMessages = database.imageMessageDao().getAllMessages().map { it.toBackup() },
-                videoChats = database.videoChatDao().getAllChats().map { it.toBackup() },
-                videoMessages = database.videoMessageDao().getAllMessages().map { it.toBackup() }
+        val export = database.withTransaction {
+            val mediaEntries = mutableListOf<BackupMediaEntry>()
+            val imageMessages = database.imageMessageDao().getAllMessages().map { message ->
+                message.toBackup(mediaEntries)
+            }
+            val videoMessages = database.videoMessageDao().getAllMessages().map { message ->
+                message.toBackup(mediaEntries)
+            }
+            BackupExport(
+                backup = ChatBackupDto(
+                    exportedAt = System.currentTimeMillis(),
+                    chats = database.chatDao().getAllChats().map { it.toBackup() },
+                    messages = database.messageDao().getAllMessages().map { it.toBackup() },
+                    chatModelSettings = database.chatModelSettingsDao().getAllSettings().map { it.toBackup() },
+                    roles = database.modelRoleDao().getAllRoles().map { it.toBackup() },
+                    imageChats = database.imageChatDao().getAllChats().map { it.toBackup() },
+                    imageMessages = imageMessages,
+                    videoChats = database.videoChatDao().getAllChats().map { it.toBackup() },
+                    videoMessages = videoMessages
+                ),
+                mediaEntries = mediaEntries
             )
         }
-        val content = json.encodeToString(backup)
-        val fileName = "xai_chat_backup_${fileTimestamp()}.json"
+        val fileName = "xai_chat_backup_${fileTimestamp()}.zip"
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            exportScoped(fileName, content)
+            exportScoped(fileName) { output -> writeZipBackup(output, export) }
         } else {
-            exportLegacy(fileName, content)
+            exportLegacy(fileName) { output -> writeZipBackup(output, export) }
         }
     }
 
     suspend fun importBackup(uri: Uri): BackupImportSummary {
-        val content = context.contentResolver.openInputStream(uri)?.use { input ->
-            input.bufferedReader().readText()
-        } ?: throw IllegalStateException("Unable to open backup file.")
-        val backup = json.decodeFromString<ChatBackupDto>(content)
+        val importedBackup = readBackup(uri)
+        val backup = importedBackup.backup
+        val existingImagePaths = database.imageMessageDao().getAllMessages()
+            .mapNotNull { it.imageFilePath }
+            .toSet()
         val existingVideoPaths = database.videoMessageDao().getAllMessages()
             .mapNotNull { it.videoFilePath }
             .toSet()
+        val restoredImagePaths = mutableSetOf<String>()
         val restoredVideoPaths = mutableSetOf<String>()
         database.withTransaction {
             database.messageDao().deleteAllMessages()
@@ -86,21 +103,41 @@ class BackupRepository(
             database.imageChatDao().insertChats(backup.imageChats.map { it.toEntity() })
             database.chatModelSettingsDao().upsertSettings(backup.chatModelSettings.map { it.toEntity() })
             database.messageDao().insertMessages(backup.messages.map { it.toEntity() })
-            database.imageMessageDao().insertMessages(backup.imageMessages.map { it.toEntity() })
+            database.imageMessageDao().insertMessages(
+                backup.imageMessages.map { message ->
+                    val imageFilePath = restoreImageFile(
+                        archivePath = message.imageArchivePath,
+                        importedMedia = importedBackup.media,
+                        imageBase64 = message.imageBase64,
+                        mimeType = message.imageMimeType
+                    ) ?: message.imageFilePath
+                    message.toEntity(imageFilePath).also { entity ->
+                        entity.imageFilePath?.let(restoredImagePaths::add)
+                    }
+                }
+            )
             database.videoChatDao().insertChats(backup.videoChats.map { it.toEntity() })
             database.videoMessageDao().insertMessages(
                 backup.videoMessages.map { message ->
-                    val videoFilePath = restoreVideoFile(message.videoBase64, message.videoMimeType)
-                        ?: message.videoFilePath
+                    val videoFilePath = restoreVideoFile(
+                        archivePath = message.videoArchivePath,
+                        importedMedia = importedBackup.media,
+                        videoBase64 = message.videoBase64,
+                        mimeType = message.videoMimeType
+                    ) ?: message.videoFilePath
                     message.toEntity(videoFilePath).also { entity ->
                         entity.videoFilePath?.let(restoredVideoPaths::add)
                     }
                 }
             )
         }
+        existingImagePaths
+            .filterNot { it in restoredImagePaths }
+            .forEach { deleteAppFile(it, APP_IMAGES_DIR) }
         existingVideoPaths
             .filterNot { it in restoredVideoPaths }
-            .forEach(::deleteVideoFile)
+            .forEach { deleteAppFile(it, APP_VIDEOS_DIR) }
+        importedBackup.cleanup()
         return BackupImportSummary(
             chatCount = backup.chats.size,
             imageChatCount = backup.imageChats.size,
@@ -108,10 +145,96 @@ class BackupRepository(
         )
     }
 
-    private fun exportScoped(fileName: String, content: String): Uri {
+    private suspend fun readJsonBackup(input: InputStream): ImportedBackup {
+        val content = input.bufferedReader().readText()
+        return ImportedBackup(json.decodeFromString<ChatBackupDto>(content), emptyMap())
+    }
+
+    private suspend fun readZipBackup(input: InputStream): ImportedBackup {
+        val media = mutableMapOf<String, File>()
+        var backup: ChatBackupDto? = null
+        ZipInputStream(input.buffered()).use { zip ->
+            generateSequence { zip.nextEntry }.forEach { entry ->
+                if (!entry.isDirectory) {
+                    when (entry.name) {
+                        BACKUP_JSON_ENTRY -> {
+                            backup = json.decodeFromString<ChatBackupDto>(zip.readEntryText())
+                        }
+                        else -> if (entry.name.startsWith(MEDIA_ENTRY_PREFIX)) {
+                            media[entry.name] = copyZipEntryToTempFile(zip, entry.name)
+                        }
+                    }
+                }
+                zip.closeEntry()
+            }
+        }
+        return ImportedBackup(
+            backup = backup ?: throw IllegalStateException("Backup archive does not contain $BACKUP_JSON_ENTRY."),
+            media = media
+        )
+    }
+
+    private suspend fun readBackup(uri: Uri): ImportedBackup {
+        return context.contentResolver.openInputStream(uri)?.use { input ->
+            if (isZipBackup(uri)) {
+                readZipBackup(input)
+            } else {
+                readJsonBackup(input)
+            }
+        } ?: throw IllegalStateException("Unable to open backup file.")
+    }
+
+    private fun isZipBackup(uri: Uri): Boolean {
+        val type = context.contentResolver.getType(uri).orEmpty()
+        return type == ZIP_MIME_TYPE ||
+            uri.toString().endsWith(".zip", ignoreCase = true) ||
+            getDisplayName(uri)?.endsWith(".zip", ignoreCase = true) == true
+    }
+
+    private fun getDisplayName(uri: Uri): String? {
+        return context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    cursor.getString(0)
+                } else {
+                    null
+                }
+            }
+    }
+
+    private fun writeZipBackup(output: OutputStream, export: BackupExport) {
+        ZipOutputStream(output.buffered()).use { zip ->
+            zip.putNextEntry(ZipEntry(BACKUP_JSON_ENTRY))
+            zip.write(json.encodeToString(export.backup).toByteArray(Charsets.UTF_8))
+            zip.closeEntry()
+
+            export.mediaEntries.forEach { media ->
+                zip.putNextEntry(ZipEntry(media.archivePath))
+                media.writeTo(zip)
+                zip.closeEntry()
+            }
+        }
+    }
+
+    private fun copyZipEntryToTempFile(zip: ZipInputStream, archivePath: String): File {
+        val tempDir = File(context.cacheDir, IMPORT_TEMP_DIR)
+        if (!tempDir.exists() && !tempDir.mkdirs()) {
+            throw IllegalStateException("Unable to create backup import cache.")
+        }
+        val file = File(tempDir, "${System.currentTimeMillis()}_${System.nanoTime()}_${File(archivePath).name}")
+        file.outputStream().use { output -> zip.copyTo(output) }
+        return file
+    }
+
+    private fun ZipInputStream.readEntryText(): String {
+        val bytes = readBytes()
+        return bytes.toString(Charsets.UTF_8)
+    }
+
+    private fun exportScoped(fileName: String, writer: (OutputStream) -> Unit): Uri {
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-            put(MediaStore.Downloads.MIME_TYPE, "application/json")
+            put(MediaStore.Downloads.MIME_TYPE, ZIP_MIME_TYPE)
             put(
                 MediaStore.Downloads.RELATIVE_PATH,
                 "${Environment.DIRECTORY_DOWNLOADS}/$BACKUP_DIR"
@@ -122,9 +245,8 @@ class BackupRepository(
         val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
             ?: throw IllegalStateException("Unable to create backup file.")
         runCatching {
-            resolver.openOutputStream(uri)?.use { output ->
-                output.write(content.toByteArray(Charsets.UTF_8))
-            } ?: throw IllegalStateException("Unable to write backup file.")
+            resolver.openOutputStream(uri)?.use(writer)
+                ?: throw IllegalStateException("Unable to write backup file.")
             values.clear()
             values.put(MediaStore.Downloads.IS_PENDING, 0)
             resolver.update(uri, values, null, null)
@@ -136,14 +258,14 @@ class BackupRepository(
     }
 
     @Suppress("DEPRECATION")
-    private fun exportLegacy(fileName: String, content: String): Uri {
+    private fun exportLegacy(fileName: String, writer: (OutputStream) -> Unit): Uri {
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         val backupDir = File(downloadsDir, BACKUP_DIR)
         if (!backupDir.exists() && !backupDir.mkdirs()) {
             throw IllegalStateException("Unable to create Downloads/$BACKUP_DIR.")
         }
         val file = File(backupDir, fileName)
-        file.writeText(content, Charsets.UTF_8)
+        file.outputStream().use(writer)
         return Uri.fromFile(file)
     }
 
@@ -151,23 +273,74 @@ class BackupRepository(
         return SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
     }
 
-    private fun restoreVideoFile(videoBase64: String?, mimeType: String?): String? {
-        val bytes = videoBase64?.let { Base64.getDecoder().decode(it) } ?: return null
-        val dir = File(context.filesDir, APP_VIDEOS_DIR)
-        if (!dir.exists() && !dir.mkdirs()) {
-            throw IllegalStateException("Unable to create video storage directory.")
+    private fun restoreImageFile(
+        archivePath: String?,
+        importedMedia: Map<String, File>,
+        imageBase64: String?,
+        mimeType: String?
+    ): String? {
+        val sourceFile = archivePath?.let(importedMedia::get)
+        val bytes = if (sourceFile == null) {
+            imageBase64?.let { Base64.getDecoder().decode(it) }
+        } else {
+            null
         }
-        val file = File(
-            dir,
-            "restored_${System.currentTimeMillis()}_${System.nanoTime()}.${mimeType.toVideoExtension()}"
+        return restoreMediaFile(
+            sourceFile = sourceFile,
+            bytes = bytes,
+            storageDirName = APP_IMAGES_DIR,
+            filePrefix = "restored_image",
+            extension = mimeType.toImageExtension()
         )
-        file.writeBytes(bytes)
+    }
+
+    private fun restoreVideoFile(
+        archivePath: String?,
+        importedMedia: Map<String, File>,
+        videoBase64: String?,
+        mimeType: String?
+    ): String? {
+        val sourceFile = archivePath?.let(importedMedia::get)
+        val bytes = if (sourceFile == null) {
+            videoBase64?.let { Base64.getDecoder().decode(it) }
+        } else {
+            null
+        }
+        return restoreMediaFile(
+            sourceFile = sourceFile,
+            bytes = bytes,
+            storageDirName = APP_VIDEOS_DIR,
+            filePrefix = "restored_video",
+            extension = mimeType.toVideoExtension()
+        )
+    }
+
+    private fun restoreMediaFile(
+        sourceFile: File?,
+        bytes: ByteArray?,
+        storageDirName: String,
+        filePrefix: String,
+        extension: String
+    ): String? {
+        if (sourceFile == null && bytes == null) return null
+        val dir = File(context.filesDir, storageDirName)
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw IllegalStateException("Unable to create media storage directory.")
+        }
+        val file = File(dir, "${filePrefix}_${System.currentTimeMillis()}_${System.nanoTime()}.$extension")
+        if (sourceFile != null) {
+            sourceFile.inputStream().use { input ->
+                file.outputStream().use { output -> input.copyTo(output) }
+            }
+        } else {
+            file.writeBytes(bytes ?: return null)
+        }
         return file.absolutePath
     }
 
-    private fun deleteVideoFile(path: String) {
+    private fun deleteAppFile(path: String, storageDirName: String) {
         runCatching {
-            val storageRoot = File(context.filesDir, APP_VIDEOS_DIR).canonicalFile
+            val storageRoot = File(context.filesDir, storageDirName).canonicalFile
             val target = File(path).canonicalFile
             if (target.path.startsWith(storageRoot.path) && target.exists()) {
                 target.delete()
@@ -177,7 +350,40 @@ class BackupRepository(
 
     private companion object {
         const val BACKUP_DIR = "xAI Chat Backups"
+        const val BACKUP_JSON_ENTRY = "backup.json"
+        const val MEDIA_ENTRY_PREFIX = "media/"
+        const val ZIP_MIME_TYPE = "application/zip"
+        const val IMPORT_TEMP_DIR = "backup_import"
+        const val APP_IMAGES_DIR = "generated_images"
         const val APP_VIDEOS_DIR = "generated_videos"
+    }
+}
+
+private data class BackupExport(
+    val backup: ChatBackupDto,
+    val mediaEntries: List<BackupMediaEntry>
+)
+
+private data class ImportedBackup(
+    val backup: ChatBackupDto,
+    val media: Map<String, File>
+) {
+    fun cleanup() {
+        media.values.forEach { it.delete() }
+    }
+}
+
+private data class BackupMediaEntry(
+    val archivePath: String,
+    val sourceFile: File? = null,
+    val bytes: ByteArray? = null
+) {
+    fun writeTo(output: OutputStream) {
+        if (sourceFile != null) {
+            sourceFile.inputStream().use { input -> input.copyTo(output) }
+        } else {
+            output.write(bytes ?: ByteArray(0))
+        }
     }
 }
 
@@ -189,7 +395,7 @@ data class BackupImportSummary(
 
 @Serializable
 private data class ChatBackupDto(
-    val schemaVersion: Int = 2,
+    val schemaVersion: Int = 3,
     val exportedAt: Long,
     val chats: List<BackupChatDto>,
     val messages: List<BackupMessageDto>,
@@ -262,6 +468,8 @@ private data class BackupImageMessageDto(
     val role: String,
     val content: String,
     val imageBase64: String?,
+    val imageArchivePath: String? = null,
+    val imageFilePath: String? = null,
     val imageMimeType: String?,
     val sourceMessageId: Long?,
     val parentMessageId: Long?,
@@ -286,6 +494,7 @@ private data class BackupVideoMessageDto(
     val content: String,
     val sourceImageUrl: String?,
     val videoBase64: String?,
+    val videoArchivePath: String? = null,
     val videoFilePath: String?,
     val videoMimeType: String?,
     val videoDurationSeconds: Int?,
@@ -396,25 +605,39 @@ private fun BackupImageChatDto.toEntity(): ImageChatEntity = ImageChatEntity(
     selectedModelId = selectedModelId
 )
 
-private fun ImageMessageEntity.toBackup(): BackupImageMessageDto = BackupImageMessageDto(
-    id = id,
-    chatId = chatId,
-    role = role.name,
-    content = content,
-    imageBase64 = imageBytes?.let { Base64.getEncoder().encodeToString(it) },
-    imageMimeType = imageMimeType,
-    sourceMessageId = sourceMessageId,
-    parentMessageId = parentMessageId,
-    activeChildMessageId = activeChildMessageId,
-    createdAt = createdAt
-)
+private fun ImageMessageEntity.toBackup(mediaEntries: MutableList<BackupMediaEntry>): BackupImageMessageDto {
+    val archivePath = imageMediaArchivePath()
+    if (archivePath != null) {
+        val sourceFile = imageFilePath?.let(::File)?.takeIf { it.exists() }
+        mediaEntries += BackupMediaEntry(
+            archivePath = archivePath,
+            sourceFile = sourceFile,
+            bytes = if (sourceFile == null) imageBytes else null
+        )
+    }
+    return BackupImageMessageDto(
+        id = id,
+        chatId = chatId,
+        role = role.name,
+        content = content,
+        imageBase64 = null,
+        imageArchivePath = archivePath,
+        imageFilePath = imageFilePath,
+        imageMimeType = imageMimeType,
+        sourceMessageId = sourceMessageId,
+        parentMessageId = parentMessageId,
+        activeChildMessageId = activeChildMessageId,
+        createdAt = createdAt
+    )
+}
 
-private fun BackupImageMessageDto.toEntity(): ImageMessageEntity = ImageMessageEntity(
+private fun BackupImageMessageDto.toEntity(restoredImageFilePath: String?): ImageMessageEntity = ImageMessageEntity(
     id = id,
     chatId = chatId,
     role = runCatching { MessageRole.valueOf(role) }.getOrDefault(MessageRole.USER),
     content = content,
-    imageBytes = imageBase64?.let { Base64.getDecoder().decode(it) },
+    imageBytes = if (restoredImageFilePath == null) imageBase64?.let { Base64.getDecoder().decode(it) } else null,
+    imageFilePath = restoredImageFilePath,
     imageMimeType = imageMimeType,
     sourceMessageId = sourceMessageId,
     parentMessageId = parentMessageId,
@@ -438,16 +661,25 @@ private fun BackupVideoChatDto.toEntity(): VideoChatEntity = VideoChatEntity(
     selectedModelId = selectedModelId
 )
 
-private fun VideoMessageEntity.toBackup(): BackupVideoMessageDto {
-    val videoBytes = videoFilePath
-        ?.let { path -> runCatching { File(path).takeIf { it.exists() }?.readBytes() }.getOrNull() }
+private fun VideoMessageEntity.toBackup(mediaEntries: MutableList<BackupMediaEntry>): BackupVideoMessageDto {
+    val sourceFile = videoFilePath?.let(::File)?.takeIf { it.exists() }
+    val archivePath = sourceFile?.let {
+        "media/videos/video_message_${id}.${videoMimeType.toVideoExtension()}"
+    }
+    if (archivePath != null) {
+        mediaEntries += BackupMediaEntry(
+            archivePath = archivePath,
+            sourceFile = sourceFile
+        )
+    }
     return BackupVideoMessageDto(
         id = id,
         chatId = chatId,
         role = role.name,
         content = content,
         sourceImageUrl = sourceImageUrl,
-        videoBase64 = videoBytes?.let { Base64.getEncoder().encodeToString(it) },
+        videoBase64 = null,
+        videoArchivePath = archivePath,
         videoFilePath = videoFilePath,
         videoMimeType = videoMimeType,
         videoDurationSeconds = videoDurationSeconds,
@@ -478,6 +710,19 @@ private fun BackupVideoMessageDto.toEntity(restoredVideoFilePath: String?): Vide
     activeChildMessageId = activeChildMessageId,
     createdAt = createdAt
 )
+
+private fun ImageMessageEntity.imageMediaArchivePath(): String? {
+    if (imageBytes == null && imageFilePath?.let { File(it).exists() } != true) return null
+    return "media/images/image_message_${id}.${imageMimeType.toImageExtension()}"
+}
+
+private fun String?.toImageExtension(): String {
+    return when (orEmpty().substringAfterLast('/').lowercase()) {
+        "png" -> "png"
+        "webp" -> "webp"
+        else -> "jpg"
+    }
+}
 
 private fun String?.toVideoExtension(): String {
     return when (orEmpty().substringAfterLast('/').lowercase()) {

@@ -113,7 +113,7 @@ fun BackupScreen(
                     Text("Экспорт")
                 }
                 Button(
-                    onClick = { importLauncher.launch(arrayOf("application/json", "text/*")) },
+                    onClick = { importLauncher.launch(arrayOf("application/zip", "application/json", "text/*")) },
                     enabled = !state.isBusy,
                     modifier = Modifier.weight(1f)
                 ) {
