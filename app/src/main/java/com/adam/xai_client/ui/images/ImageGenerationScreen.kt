@@ -163,7 +163,10 @@ fun ImageGenerationScreen(
         },
         floatingActionButton = {
             if (!isChatOpen) {
-                FloatingActionButton(onClick = onNewChat) {
+                FloatingActionButton(
+                    onClick = onNewChat,
+                    modifier = Modifier.navigationBarsPadding()
+                ) {
                     Icon(Icons.Default.Add, contentDescription = "Новый image-чат")
                 }
             }
