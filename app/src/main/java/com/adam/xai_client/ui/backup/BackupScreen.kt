@@ -1,6 +1,7 @@
 package com.adam.xai_client.ui.backup
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Environment
@@ -142,18 +143,32 @@ fun BackupScreen(
 private const val BACKUP_DIR = "xAI Chat Backups"
 private const val BACKUP_FOLDER_PATH = "Downloads/$BACKUP_DIR"
 
-private fun openBackupFolder(context: android.content.Context) {
+private fun openBackupFolder(context: Context) {
     val folderUri: Uri = DocumentsContract.buildDocumentUri(
         "com.android.externalstorage.documents",
         "primary:${Environment.DIRECTORY_DOWNLOADS}/$BACKUP_DIR"
     )
     val intent = Intent(Intent.ACTION_VIEW).apply {
         setDataAndType(folderUri, DocumentsContract.Document.MIME_TYPE_DIR)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     try {
         context.startActivity(intent)
     } catch (_: ActivityNotFoundException) {
+        openBackupFolderPicker(context, folderUri)
+    } catch (_: SecurityException) {
+        openBackupFolderPicker(context, folderUri)
+    }
+}
+
+private fun openBackupFolderPicker(context: Context, initialUri: Uri) {
+    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+        putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUri)
+    }
+    try {
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, "Не удалось открыть проводник.", Toast.LENGTH_SHORT).show()
+    } catch (_: SecurityException) {
         Toast.makeText(context, "Не удалось открыть проводник.", Toast.LENGTH_SHORT).show()
     }
 }
