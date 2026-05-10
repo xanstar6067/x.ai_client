@@ -44,6 +44,7 @@ data class ChatUiState(
     val inputTokenCount: Int = 0,
     val availableModels: List<AiModel> = emptyList(),
     val availableRoles: List<ModelRole> = emptyList(),
+    val streamingHapticsEnabled: Boolean = true,
     val isSending: Boolean = false,
     val isModelInfoOpen: Boolean = false,
     val isModelSettingsOpen: Boolean = false,
@@ -150,6 +151,12 @@ class ChatViewModel(
                         selectedRoleId = selectedRoleId
                     )
                 }
+            }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.streamingHapticsEnabled.collect { enabled ->
+                _uiState.update { it.copy(streamingHapticsEnabled = enabled) }
             }
         }
     }

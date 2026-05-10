@@ -64,6 +64,7 @@ import com.adam.xai_client.ui.components.DropdownSelector
 import com.adam.xai_client.ui.components.MessageBubble
 import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
+import com.adam.xai_client.ui.haptics.StreamingResponseHaptics
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -100,6 +101,11 @@ fun ChatScreen(
         message = state.error,
         snackbarHostState = snackbarHostState,
         onShown = onErrorShown
+    )
+    StreamingResponseHaptics(
+        messages = state.messages,
+        isSending = state.isSending,
+        enabled = state.streamingHapticsEnabled
     )
 
     LaunchedEffect(state.messages.size) {

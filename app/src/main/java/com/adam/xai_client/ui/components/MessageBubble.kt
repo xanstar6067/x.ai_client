@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ChevronLeft
@@ -36,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.MessageRole
@@ -77,7 +80,14 @@ fun MessageBubble(
     }
     var isEditing by rememberSaveable(message.id) { mutableStateOf(false) }
     var isDeleteConfirmationOpen by rememberSaveable(message.id) { mutableStateOf(false) }
-    var editedText by rememberSaveable(message.id) { mutableStateOf(message.content) }
+    var editedText by rememberSaveable(message.id, stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(
+            TextFieldValue(
+                text = message.content,
+                selection = TextRange(message.content.length)
+            )
+        )
+    }
 
     LaunchedEffect(message.id, message.content.isNotBlank(), isPending) {
         if (!isPending && message.content.isNotBlank()) {
@@ -116,10 +126,12 @@ fun MessageBubble(
                         }
                     }
                     if (visibleContent.isNotBlank()) {
-                        MarkdownText(
-                            markdown = visibleContent,
-                            color = textColor
-                        )
+                        SelectionContainer {
+                            MarkdownText(
+                                markdown = visibleContent,
+                                color = textColor
+                            )
+                        }
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -146,7 +158,10 @@ fun MessageBubble(
                             if (canEdit) {
                                 IconButton(
                                     onClick = {
-                                        editedText = message.content
+                                        editedText = TextFieldValue(
+                                            text = message.content,
+                                            selection = TextRange(message.content.length)
+                                        )
                                         isEditing = true
                                     }
                                 ) {
@@ -194,6 +209,7 @@ fun MessageBubble(
                 OutlinedTextField(
                     value = editedText,
                     onValueChange = { editedText = it },
+                    modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
                     maxLines = 10
                 )
@@ -201,10 +217,10 @@ fun MessageBubble(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        onEdit(editedText)
+                        onEdit(editedText.text)
                         isEditing = false
                     },
-                    enabled = editedText.isNotBlank()
+                    enabled = editedText.text.isNotBlank()
                 ) {
                     Text("Сохранить")
                 }
@@ -276,10 +292,12 @@ private fun ReasoningBlock(
             }
         }
         if (isExpanded) {
-            MarkdownText(
-                markdown = reasoning,
-                color = textColor.copy(alpha = 0.78f)
-            )
+            SelectionContainer {
+                MarkdownText(
+                    markdown = reasoning,
+                    color = textColor.copy(alpha = 0.78f)
+                )
+            }
         }
     }
 }

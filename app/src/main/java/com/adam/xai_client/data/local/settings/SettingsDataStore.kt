@@ -1,6 +1,7 @@
 package com.adam.xai_client.data.local.settings
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -37,6 +38,9 @@ class SettingsDataStore(private val context: Context) {
     val lastSelectedRoleId: Flow<Long?> = context.xaiSettingsDataStore.data
         .map { preferences -> preferences[LAST_SELECTED_ROLE_ID] }
 
+    val streamingHapticsEnabled: Flow<Boolean> = context.xaiSettingsDataStore.data
+        .map { preferences -> preferences[STREAMING_HAPTICS_ENABLED] ?: true }
+
     suspend fun saveApiSettings(apiKey: String, baseUrl: String) {
         context.xaiSettingsDataStore.edit { preferences ->
             preferences[API_KEY] = apiKey.trim()
@@ -64,10 +68,17 @@ class SettingsDataStore(private val context: Context) {
         }
     }
 
+    suspend fun setStreamingHapticsEnabled(enabled: Boolean) {
+        context.xaiSettingsDataStore.edit { preferences ->
+            preferences[STREAMING_HAPTICS_ENABLED] = enabled
+        }
+    }
+
     private companion object {
         val API_KEY = stringPreferencesKey("api_key")
         val BASE_URL = stringPreferencesKey("base_url")
         val LAST_SELECTED_MODEL_ID = stringPreferencesKey("last_selected_model_id")
         val LAST_SELECTED_ROLE_ID = longPreferencesKey("last_selected_role_id")
+        val STREAMING_HAPTICS_ENABLED = booleanPreferencesKey("streaming_haptics_enabled")
     }
 }

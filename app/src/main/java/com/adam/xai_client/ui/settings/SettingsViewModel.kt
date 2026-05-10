@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 data class SettingsUiState(
     val apiKey: String = "",
     val baseUrl: String = ApiSettings.DEFAULT_BASE_URL,
+    val streamingHapticsEnabled: Boolean = true,
     val isCheckingConnection: Boolean = false,
     val error: String? = null,
     val message: String? = null
@@ -42,6 +43,11 @@ class SettingsViewModel(
                 }
             }
         }
+        viewModelScope.launch {
+            settingsRepository.streamingHapticsEnabled.collect { enabled ->
+                _uiState.update { it.copy(streamingHapticsEnabled = enabled) }
+            }
+        }
     }
 
     fun onApiKeyChange(value: String) {
@@ -50,6 +56,13 @@ class SettingsViewModel(
 
     fun onBaseUrlChange(value: String) {
         _uiState.update { it.copy(baseUrl = value, error = null, message = null) }
+    }
+
+    fun onStreamingHapticsChange(enabled: Boolean) {
+        _uiState.update { it.copy(streamingHapticsEnabled = enabled, error = null, message = null) }
+        viewModelScope.launch {
+            settingsRepository.setStreamingHapticsEnabled(enabled)
+        }
     }
 
     fun save() {

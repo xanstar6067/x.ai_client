@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.Switch
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,6 +47,7 @@ fun SettingsScreen(
     state: SettingsUiState,
     onApiKeyChange: (String) -> Unit,
     onBaseUrlChange: (String) -> Unit,
+    onStreamingHapticsChange: (Boolean) -> Unit,
     onSave: () -> Unit,
     onCheckConnection: () -> Unit,
     onBack: () -> Unit,
@@ -105,6 +107,27 @@ fun SettingsScreen(
                 label = { Text("Базовый URL") },
                 singleLine = true
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Тактильный отклик при ответе",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        text = "Легкие импульсы во время потокового вывода текста модели.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = state.streamingHapticsEnabled,
+                    onCheckedChange = onStreamingHapticsChange
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)

@@ -134,6 +134,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 state = state,
                 onApiKeyChange = viewModel::onApiKeyChange,
                 onBaseUrlChange = viewModel::onBaseUrlChange,
+                onStreamingHapticsChange = viewModel::onStreamingHapticsChange,
                 onSave = viewModel::save,
                 onCheckConnection = viewModel::checkConnection,
                 onBack = { navController.popBackStack() },
