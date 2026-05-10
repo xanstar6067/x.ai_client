@@ -208,6 +208,15 @@ class ImageGenerationViewModel(
         }
     }
 
+    fun duplicateChat(chatId: Long) {
+        viewModelScope.launch {
+            runCatching { imageRepository.duplicateChat(chatId) }
+                .onFailure { throwable ->
+                    _uiState.update { it.copy(error = throwable.toUserMessage()) }
+                }
+        }
+    }
+
     fun deleteMessage(messageId: Long) {
         viewModelScope.launch {
             if (_uiState.value.isGenerating) return@launch

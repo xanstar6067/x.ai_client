@@ -39,6 +39,9 @@ interface ImageMessageDao {
     @Query("SELECT * FROM image_messages ORDER BY chatId ASC, createdAt ASC, id ASC")
     suspend fun getAllMessages(): List<ImageMessageEntity>
 
+    @Query("SELECT * FROM image_messages WHERE chatId = :chatId ORDER BY createdAt ASC, id ASC")
+    suspend fun getMessageEntities(chatId: Long): List<ImageMessageEntity>
+
     @Query(
         """
         SELECT id, chatId, role, content, imageFilePath, imageMimeType,

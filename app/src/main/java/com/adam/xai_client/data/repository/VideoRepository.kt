@@ -111,6 +111,41 @@ class VideoRepository(
         videoChatDao.deleteChatById(chatId)
     }
 
+    suspend fun duplicateChat(chatId: Long, now: Long = System.currentTimeMillis()): Long {
+        return database.withTransaction {
+            val chat = videoChatDao.getChat(chatId) ?: return@withTransaction 0L
+            val newChatId = videoChatDao.insertChat(
+                chat.copy(
+                    id = 0,
+                    title = chat.title.asCopyTitle(),
+                    createdAt = now,
+                    updatedAt = now
+                )
+            )
+            val idMap = mutableMapOf<Long, Long>()
+            val messages = videoMessageDao.getMessages(chatId)
+            messages.forEach { message ->
+                val newMessageId = videoMessageDao.insertMessage(
+                    message.copy(
+                        id = 0,
+                        chatId = newChatId,
+                        videoFilePath = copyVideoFile(message.videoFilePath),
+                        parentMessageId = message.parentMessageId?.let(idMap::get),
+                        activeChildMessageId = null
+                    )
+                )
+                idMap[message.id] = newMessageId
+            }
+            messages.forEach { message ->
+                val newMessageId = idMap[message.id] ?: return@forEach
+                message.activeChildMessageId
+                    ?.let(idMap::get)
+                    ?.let { activeChildId -> videoMessageDao.updateActiveChild(newMessageId, activeChildId) }
+            }
+            newChatId
+        }
+    }
+
     suspend fun deleteMessage(messageId: Long) {
         database.withTransaction {
             val message = videoMessageDao.getMessage(messageId) ?: return@withTransaction
@@ -338,6 +373,18 @@ class VideoRepository(
         }
     }
 
+    private fun copyVideoFile(path: String?): String? {
+        val source = path?.let { File(it) } ?: return null
+        if (!source.exists()) return path
+        val extension = source.extension.ifBlank { "mp4" }
+        val target = File(videoStorageDir, "copy_${System.currentTimeMillis()}_${System.nanoTime()}.$extension")
+        if (!videoStorageDir.exists() && !videoStorageDir.mkdirs()) {
+            throw IllegalStateException("Cannot create video storage directory.")
+        }
+        source.copyTo(target, overwrite = false)
+        return target.absolutePath
+    }
+
     private fun List<VideoMessageEntity>.activePath(): List<VideoMessageEntity> {
         if (isEmpty()) return emptyList()
         val byId = associateBy { it.id }
@@ -384,6 +431,8 @@ class VideoRepository(
         const val NEW_CHAT_TITLE = "Новый video-чат"
     }
 }
+
+private fun String.asCopyTitle(): String = "$this (копия)"
 
 private fun String.toVideoExtension(): String {
     return when (substringAfterLast('/').lowercase()) {

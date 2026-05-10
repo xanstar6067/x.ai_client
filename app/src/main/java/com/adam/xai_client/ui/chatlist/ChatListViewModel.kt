@@ -43,6 +43,15 @@ class ChatListViewModel(
         }
     }
 
+    fun duplicateChat(chatId: Long) {
+        viewModelScope.launch {
+            runCatching { chatRepository.duplicateChat(chatId) }
+                .onFailure { throwable ->
+                    _uiState.update { it.copy(error = throwable.toUserMessage()) }
+                }
+        }
+    }
+
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }

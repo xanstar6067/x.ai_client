@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
@@ -98,6 +99,7 @@ fun ImageGenerationScreen(
     onChatSelected: (Long?) -> Unit,
     onNewChat: () -> Unit,
     onDeleteChat: (Long) -> Unit,
+    onDuplicateChat: (Long) -> Unit,
     onImageSettingsOpenChange: (Boolean) -> Unit,
     onModelInfoOpenChange: (Boolean) -> Unit,
     onShowChatList: () -> Unit,
@@ -119,6 +121,7 @@ fun ImageGenerationScreen(
     val clipboardManager = LocalClipboardManager.current
     var pendingSaveMessageId by remember { mutableLongStateOf(0L) }
     var chatPendingDeletion by remember { mutableStateOf<ImageChat?>(null) }
+    var chatPendingDuplication by remember { mutableStateOf<ImageChat?>(null) }
     val isChatOpen = state.selectedChatId != null || state.isNewChatMode
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -187,6 +190,7 @@ fun ImageGenerationScreen(
                 state = state,
                 padding = padding,
                 onOpenChat = { onChatSelected(it) },
+                onDuplicateChat = { chatPendingDuplication = it },
                 onDeleteChat = { chatPendingDeletion = it }
             )
         } else {
@@ -260,6 +264,29 @@ fun ImageGenerationScreen(
             }
         )
     }
+
+    chatPendingDuplication?.let { chat ->
+        AlertDialog(
+            onDismissRequest = { chatPendingDuplication = null },
+            title = { Text("Скопировать чат?") },
+            text = { Text("Будет создана копия чата \"${chat.title}\" со всеми сообщениями.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDuplicateChat(chat.id)
+                        chatPendingDuplication = null
+                    }
+                ) {
+                    Text("Скопировать")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { chatPendingDuplication = null }) {
+                    Text("Отмена")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -267,6 +294,7 @@ private fun ImageChatList(
     state: ImageGenerationUiState,
     padding: PaddingValues,
     onOpenChat: (Long) -> Unit,
+    onDuplicateChat: (ImageChat) -> Unit,
     onDeleteChat: (ImageChat) -> Unit
 ) {
     if (state.chats.isEmpty()) {
@@ -304,6 +332,7 @@ private fun ImageChatList(
                 ImageChatCard(
                     chat = chat,
                     onClick = { onOpenChat(chat.id) },
+                    onDuplicate = { onDuplicateChat(chat) },
                     onDelete = { onDeleteChat(chat) }
                 )
             }
@@ -315,6 +344,7 @@ private fun ImageChatList(
 private fun ImageChatCard(
     chat: ImageChat,
     onClick: () -> Unit,
+    onDuplicate: () -> Unit,
     onDelete: () -> Unit
 ) {
     val dateFormat = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT) }
@@ -344,6 +374,9 @@ private fun ImageChatCard(
                 )
             }
             Spacer(modifier = Modifier.padding(start = 8.dp))
+            IconButton(onClick = onDuplicate) {
+                Icon(Icons.Default.ContentCopy, contentDescription = "Скопировать чат")
+            }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = "Удалить чат")
             }
@@ -641,6 +674,36 @@ private fun ImageMessageCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (message.role == MessageRole.USER) {
+                    IconButton(
+                        onClick = {
+                            editedText = message.content
+                            isTextEditOpen = true
+                        },
+                        enabled = !isGenerating
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "Редактировать")
+                    }
+                }
+                IconButton(
+                    onClick = { isDeleteConfirmationOpen = true },
+                    enabled = !isGenerating
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = "Удалить")
+                }
+                if (message.content.isNotBlank()) {
+                    IconButton(onClick = onCopy) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Копировать")
+                    }
+                }
+                if (message.role == MessageRole.ASSISTANT) {
+                    IconButton(
+                        onClick = onRegenerate,
+                        enabled = !isGenerating
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Сгенерировать заново")
+                    }
+                }
                 if (message.versionCount > 1) {
                     Text(
                         text = "${message.versionIndex}/${message.versionCount}",
@@ -660,41 +723,13 @@ private fun ImageMessageCard(
                         Icon(Icons.Default.ChevronRight, contentDescription = "Следующая версия")
                     }
                 }
-                if (message.content.isNotBlank()) {
-                    IconButton(onClick = onCopy) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Копировать")
-                    }
-                }
                 if (message.role == MessageRole.USER) {
                     IconButton(
                         onClick = onGenerateFromUser,
                         enabled = !isGenerating
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Сгенерировать ответ")
+                        Icon(Icons.Default.ArrowDownward, contentDescription = "Отправить снова")
                     }
-                    IconButton(
-                        onClick = {
-                            editedText = message.content
-                            isTextEditOpen = true
-                        },
-                        enabled = !isGenerating
-                    ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Редактировать")
-                    }
-                }
-                if (message.role == MessageRole.ASSISTANT) {
-                    IconButton(
-                        onClick = onRegenerate,
-                        enabled = !isGenerating
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Сгенерировать заново")
-                    }
-                }
-                IconButton(
-                    onClick = { isDeleteConfirmationOpen = true },
-                    enabled = !isGenerating
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Удалить")
                 }
             }
         }

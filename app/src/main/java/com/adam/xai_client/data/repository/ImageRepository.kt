@@ -124,6 +124,41 @@ class ImageRepository(
         imageChatDao.deleteChatById(chatId)
     }
 
+    suspend fun duplicateChat(chatId: Long, now: Long = System.currentTimeMillis()): Long {
+        return database.withTransaction {
+            val chat = imageChatDao.getChat(chatId) ?: return@withTransaction 0L
+            val newChatId = imageChatDao.insertChat(
+                chat.copy(
+                    id = 0,
+                    title = chat.title.asCopyTitle(),
+                    createdAt = now,
+                    updatedAt = now
+                )
+            )
+            val idMap = mutableMapOf<Long, Long>()
+            val messages = imageMessageDao.getMessageEntities(chatId)
+            messages.forEach { message ->
+                val newMessageId = imageMessageDao.insertMessage(
+                    message.copy(
+                        id = 0,
+                        chatId = newChatId,
+                        sourceMessageId = message.sourceMessageId?.let(idMap::get) ?: message.sourceMessageId,
+                        parentMessageId = message.parentMessageId?.let(idMap::get),
+                        activeChildMessageId = null
+                    )
+                )
+                idMap[message.id] = newMessageId
+            }
+            messages.forEach { message ->
+                val newMessageId = idMap[message.id] ?: return@forEach
+                message.activeChildMessageId
+                    ?.let(idMap::get)
+                    ?.let { activeChildId -> imageMessageDao.updateActiveChild(newMessageId, activeChildId) }
+            }
+            newChatId
+        }
+    }
+
     suspend fun deleteMessage(messageId: Long) {
         database.withTransaction {
             val message = imageMessageDao.getMessage(messageId) ?: return@withTransaction
@@ -407,3 +442,5 @@ class ImageRepository(
         }
     }
 }
+
+private fun String.asCopyTitle(): String = "$this (копия)"

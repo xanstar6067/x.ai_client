@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Backup
@@ -54,6 +55,7 @@ fun ChatListScreen(
     onOpenChat: (Long) -> Unit,
     onNewChat: () -> Unit,
     onDeleteChat: (Long) -> Unit,
+    onDuplicateChat: (Long) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenModels: () -> Unit,
     onOpenRoles: () -> Unit,
@@ -64,6 +66,7 @@ fun ChatListScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var chatPendingDeletion by remember { mutableStateOf<Chat?>(null) }
+    var chatPendingDuplication by remember { mutableStateOf<Chat?>(null) }
     TransientSnackbar(
         message = state.error,
         snackbarHostState = snackbarHostState,
@@ -138,6 +141,7 @@ fun ChatListScreen(
                     ChatCard(
                         chat = chat,
                         onClick = { onOpenChat(chat.id) },
+                        onDuplicate = { chatPendingDuplication = chat },
                         onDelete = { chatPendingDeletion = chat }
                     )
                 }
@@ -169,12 +173,36 @@ fun ChatListScreen(
             }
         )
     }
+
+    chatPendingDuplication?.let { chat ->
+        AlertDialog(
+            onDismissRequest = { chatPendingDuplication = null },
+            title = { Text("Скопировать чат?") },
+            text = { Text("Будет создана копия чата \"${chat.title}\" со всеми сообщениями и настройками.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDuplicateChat(chat.id)
+                        chatPendingDuplication = null
+                    }
+                ) {
+                    Text("Скопировать")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { chatPendingDuplication = null }) {
+                    Text("Отмена")
+                }
+            }
+        )
+    }
 }
 
 @Composable
 private fun ChatCard(
     chat: Chat,
     onClick: () -> Unit,
+    onDuplicate: () -> Unit,
     onDelete: () -> Unit
 ) {
     val dateFormat = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT) }
@@ -204,6 +232,9 @@ private fun ChatCard(
                 )
             }
             Spacer(modifier = Modifier.padding(start = 8.dp))
+            IconButton(onClick = onDuplicate) {
+                Icon(Icons.Default.ContentCopy, contentDescription = "Скопировать чат")
+            }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = "Удалить чат")
             }
