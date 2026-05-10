@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -75,6 +76,7 @@ fun ChatScreen(
     onModelSelected: (String) -> Unit,
     onRoleSelected: (Long) -> Unit,
     onSend: () -> Unit,
+    onStopSending: () -> Unit,
     onRegenerate: (Long) -> Unit,
     onResendMessage: (Long) -> Unit,
     onSwitchMessageVersion: (Long, Int) -> Unit,
@@ -246,7 +248,8 @@ fun ChatScreen(
                 isSending = state.isSending,
                 onInputChange = onInputChange,
                 onWebSearchEnabledChange = onWebSearchEnabledChange,
-                onSend = onSend
+                onSend = onSend,
+                onStopSending = onStopSending
             )
         }
     }
@@ -336,7 +339,8 @@ private fun ChatInput(
     isSending: Boolean,
     onInputChange: (String) -> Unit,
     onWebSearchEnabledChange: (Boolean) -> Unit,
-    onSend: () -> Unit
+    onSend: () -> Unit,
+    onStopSending: () -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val sendAndHideKeyboard = {
@@ -386,10 +390,14 @@ private fun ChatInput(
         )
         IconButton(
             modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
-            onClick = sendAndHideKeyboard,
-            enabled = !isSending && inputText.isNotBlank()
+            onClick = if (isSending) onStopSending else sendAndHideKeyboard,
+            enabled = isSending || inputText.isNotBlank()
         ) {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
+            if (isSending) {
+                Icon(Icons.Filled.Stop, contentDescription = "Остановить")
+            } else {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
+            }
         }
     }
 }

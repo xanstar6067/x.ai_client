@@ -17,7 +17,9 @@ import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.ModelLimits
 import com.adam.xai_client.domain.model.XaiModelLimits
 import com.adam.xai_client.ui.components.toUserMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +28,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 data class ImageGenerationUiState(
     val prompt: String = "",
@@ -54,6 +57,7 @@ class ImageGenerationViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ImageGenerationUiState())
     val uiState: StateFlow<ImageGenerationUiState> = _uiState.asStateFlow()
+    private var generationJob: Job? = null
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val selectedChatMessages = uiState
@@ -258,7 +262,8 @@ class ImageGenerationViewModel(
     }
 
     fun generate() {
-        viewModelScope.launch {
+        if (generationJob?.isActive == true) return
+        generationJob = viewModelScope.launch {
             val state = _uiState.value
             val prompt = state.prompt.trim()
             if (prompt.isBlank()) {
@@ -278,42 +283,44 @@ class ImageGenerationViewModel(
             }
 
             runCatching {
-                val chatId = state.selectedChatId ?: imageRepository.createChat(
-                    title = prompt.toImageChatTitle(),
-                    selectedModelId = modelId
-                )
-                val parentMessageId = imageRepository.getVisibleTailMessageId(chatId)
-                val sourceDataUrl = state.editingMessageId?.let { messageId ->
-                    state.messages.firstOrNull { it.id == messageId }?.generatedImage
-                        ?.let { imageRepository.imageAsDataUrl(it) }
-                }
-                val userMessageId = imageRepository.addUserMessage(
-                    chatId = chatId,
-                    content = prompt,
-                    parentMessageId = parentMessageId
-                )
-                val image = imageRepository.generateImage(
-                    ImageGenerationOptions(
-                        modelId = modelId,
-                        prompt = prompt,
-                        aspectRatio = state.aspectRatio.takeUnless { it == "auto" },
-                        resolution = state.resolution,
-                        sourceImageUrl = sourceDataUrl ?: state.sourceImageUrl.trim().ifBlank { null }
+                withTimeout(GENERATION_TIMEOUT_MS) {
+                    val chatId = state.selectedChatId ?: imageRepository.createChat(
+                        title = prompt.toImageChatTitle(),
+                        selectedModelId = modelId
                     )
-                )
-                imageRepository.addAssistantImageMessage(
-                    chatId = chatId,
-                    content = prompt,
-                    image = image,
-                    sourceMessageId = state.editingMessageId,
-                    parentMessageId = userMessageId
-                )
-                imageRepository.updateChatAfterGeneration(
-                    chatId = chatId,
-                    title = prompt.toImageChatTitle(),
-                    selectedModelId = modelId
-                )
-                chatId
+                    val parentMessageId = imageRepository.getVisibleTailMessageId(chatId)
+                    val sourceDataUrl = state.editingMessageId?.let { messageId ->
+                        state.messages.firstOrNull { it.id == messageId }?.generatedImage
+                            ?.let { imageRepository.imageAsDataUrl(it) }
+                    }
+                    val userMessageId = imageRepository.addUserMessage(
+                        chatId = chatId,
+                        content = prompt,
+                        parentMessageId = parentMessageId
+                    )
+                    val image = imageRepository.generateImage(
+                        ImageGenerationOptions(
+                            modelId = modelId,
+                            prompt = prompt,
+                            aspectRatio = state.aspectRatio.takeUnless { it == "auto" },
+                            resolution = state.resolution,
+                            sourceImageUrl = sourceDataUrl ?: state.sourceImageUrl.trim().ifBlank { null }
+                        )
+                    )
+                    imageRepository.addAssistantImageMessage(
+                        chatId = chatId,
+                        content = prompt,
+                        image = image,
+                        sourceMessageId = state.editingMessageId,
+                        parentMessageId = userMessageId
+                    )
+                    imageRepository.updateChatAfterGeneration(
+                        chatId = chatId,
+                        title = prompt.toImageChatTitle(),
+                        selectedModelId = modelId
+                    )
+                    chatId
+                }
             }.onSuccess { chatId ->
                 _uiState.update {
                     it.copy(
@@ -328,14 +335,27 @@ class ImageGenerationViewModel(
                     )
                 }
             }.onFailure { throwable ->
+                if (throwable is CancellationException) {
+                    _uiState.update { it.copy(isGenerating = false, error = null, message = null) }
+                    return@launch
+                }
                 _uiState.update {
                     it.copy(
                         isGenerating = false,
                         error = throwable.toUserMessage()
                     )
                 }
+            }.also {
+                _uiState.update { it.copy(isGenerating = false) }
+                generationJob = null
             }
         }
+    }
+
+    fun stopGeneration() {
+        generationJob?.cancel()
+        generationJob = null
+        _uiState.update { it.copy(isGenerating = false, error = null, message = null) }
     }
 
     fun regenerateLastResponse() {
@@ -347,7 +367,8 @@ class ImageGenerationViewModel(
     }
 
     fun regenerateResponse(messageId: Long) {
-        viewModelScope.launch {
+        if (generationJob?.isActive == true) return
+        generationJob = viewModelScope.launch {
             val state = _uiState.value
             val chatId = state.selectedChatId ?: return@launch
             if (state.isGenerating) return@launch
@@ -394,13 +415,21 @@ class ImageGenerationViewModel(
             }.onSuccess {
                 _uiState.update { it.copy(isGenerating = false, error = null, message = null) }
             }.onFailure { throwable ->
+                if (throwable is CancellationException) {
+                    _uiState.update { it.copy(isGenerating = false, error = null, message = null) }
+                    return@launch
+                }
                 _uiState.update { it.copy(isGenerating = false, error = throwable.toUserMessage()) }
+            }.also {
+                _uiState.update { it.copy(isGenerating = false) }
+                generationJob = null
             }
         }
     }
 
     fun generateFromUserMessage(messageId: Long) {
-        viewModelScope.launch {
+        if (generationJob?.isActive == true) return
+        generationJob = viewModelScope.launch {
             val state = _uiState.value
             val chatId = state.selectedChatId ?: return@launch
             if (state.isGenerating) return@launch
@@ -440,7 +469,14 @@ class ImageGenerationViewModel(
             }.onSuccess {
                 _uiState.update { it.copy(isGenerating = false, error = null, message = null) }
             }.onFailure { throwable ->
+                if (throwable is CancellationException) {
+                    _uiState.update { it.copy(isGenerating = false, error = null, message = null) }
+                    return@launch
+                }
                 _uiState.update { it.copy(isGenerating = false, error = throwable.toUserMessage()) }
+            }.also {
+                _uiState.update { it.copy(isGenerating = false) }
+                generationJob = null
             }
         }
     }
@@ -499,6 +535,8 @@ class ImageGenerationViewModel(
     }
 
     companion object {
+        private const val GENERATION_TIMEOUT_MS = 360_000L
+
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 ImageGenerationViewModel(imageRepository = container.imageRepository)

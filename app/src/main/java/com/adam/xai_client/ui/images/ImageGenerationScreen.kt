@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -112,6 +113,7 @@ fun ImageGenerationScreen(
     onDeleteMessage: (Long) -> Unit,
     onClearEditSource: () -> Unit,
     onGenerate: () -> Unit,
+    onStopGeneration: () -> Unit,
     onGenerateFromMessage: (Long) -> Unit,
     onRegenerate: (Long) -> Unit,
     onSwitchMessageVersion: (Long, Int) -> Unit,
@@ -211,6 +213,7 @@ fun ImageGenerationScreen(
                 onCopyMessage = { text -> clipboardManager.setText(AnnotatedString(text)) },
                 onClearEditSource = onClearEditSource,
                 onGenerate = onGenerate,
+                onStopGeneration = onStopGeneration,
                 onGenerateFromMessage = onGenerateFromMessage,
                 onRegenerate = onRegenerate,
                 onSwitchMessageVersion = onSwitchMessageVersion,
@@ -402,6 +405,7 @@ private fun ImageChatContent(
     onCopyMessage: (String) -> Unit,
     onClearEditSource: () -> Unit,
     onGenerate: () -> Unit,
+    onStopGeneration: () -> Unit,
     onGenerateFromMessage: (Long) -> Unit,
     onRegenerate: (Long) -> Unit,
     onSwitchMessageVersion: (Long, Int) -> Unit,
@@ -468,7 +472,8 @@ private fun ImageChatContent(
             onPromptChange = onPromptChange,
             onSourceImageUrlChange = onSourceImageUrlChange,
             onClearEditSource = onClearEditSource,
-            onGenerate = onGenerate
+            onGenerate = onGenerate,
+            onStopGeneration = onStopGeneration
         )
     }
 }
@@ -544,7 +549,8 @@ private fun ImagePromptBar(
     onPromptChange: (String) -> Unit,
     onSourceImageUrlChange: (String) -> Unit,
     onClearEditSource: () -> Unit,
-    onGenerate: () -> Unit
+    onGenerate: () -> Unit,
+    onStopGeneration: () -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val generateAndHideKeyboard = {
@@ -599,13 +605,16 @@ private fun ImagePromptBar(
                 modifier = Modifier.weight(1f)
             )
             IconButton(
-                onClick = generateAndHideKeyboard,
-                enabled = !state.isGenerating &&
-                    state.prompt.isNotBlank() &&
-                    state.selectedModelId != null,
+                onClick = if (state.isGenerating) onStopGeneration else generateAndHideKeyboard,
+                enabled = state.isGenerating ||
+                    (state.prompt.isNotBlank() && state.selectedModelId != null),
                 modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
             ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
+                if (state.isGenerating) {
+                    Icon(Icons.Filled.Stop, contentDescription = "Остановить")
+                } else {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
+                }
             }
         }
     }

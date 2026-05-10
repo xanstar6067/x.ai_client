@@ -24,6 +24,8 @@ import com.adam.xai_client.domain.usecase.MessageSendFailedException
 import com.adam.xai_client.domain.usecase.SendMessageUseCase
 import com.adam.xai_client.ui.components.toUserMessage
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +33,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 data class ChatUiState(
     val chatId: Long? = null,
@@ -66,6 +69,7 @@ class ChatViewModel(
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     private var latestModels: List<AiModel> = emptyList()
+    private var sendJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -241,23 +245,26 @@ class ChatViewModel(
     }
 
     fun sendMessage() {
-        viewModelScope.launch {
+        if (sendJob?.isActive == true) return
+        sendJob = viewModelScope.launch {
             val outgoingText = _uiState.value.inputText
             _uiState.update { it.copy(isSending = true, error = null, inputText = "", inputTokenCount = 0) }
 
             runCatching {
-                val state = _uiState.value
-                sendMessageUseCase(
-                    chatId = state.chatId,
-                    input = outgoingText,
-                    selectedModelId = state.selectedModelId,
-                    selectedRoleId = state.selectedRoleId,
-                    modelSettings = state.modelSettings,
-                    onChatReady = { newChatId ->
-                        chatIdFlow.value = newChatId
-                        _uiState.update { it.copy(chatId = newChatId) }
-                    }
-                )
+                withTimeout(SEND_TIMEOUT_MS) {
+                    val state = _uiState.value
+                    sendMessageUseCase(
+                        chatId = state.chatId,
+                        input = outgoingText,
+                        selectedModelId = state.selectedModelId,
+                        selectedRoleId = state.selectedRoleId,
+                        modelSettings = state.modelSettings,
+                        onChatReady = { newChatId ->
+                            chatIdFlow.value = newChatId
+                            _uiState.update { it.copy(chatId = newChatId) }
+                        }
+                    )
+                }
             }.onSuccess { newChatId ->
                 chatIdFlow.value = newChatId
                 _uiState.update {
@@ -269,6 +276,15 @@ class ChatViewModel(
                     )
                 }
             }.onFailure { throwable ->
+                if (throwable is CancellationException) {
+                    _uiState.update {
+                        it.copy(
+                            isSending = false,
+                            error = null
+                        )
+                    }
+                    return@launch
+                }
                 val failedChatId = (throwable as? MessageSendFailedException)?.chatId
                 if (failedChatId != null) {
                     chatIdFlow.value = failedChatId
@@ -282,8 +298,17 @@ class ChatViewModel(
                         error = throwable.toUserMessage()
                     )
                 }
+            }.also {
+                _uiState.update { it.copy(isSending = false) }
+                sendJob = null
             }
         }
+    }
+
+    fun stopSending() {
+        sendJob?.cancel()
+        sendJob = null
+        _uiState.update { it.copy(isSending = false, error = null) }
     }
 
     fun regenerateLastResponse() {
@@ -295,7 +320,8 @@ class ChatViewModel(
     }
 
     fun regenerateResponse(messageId: Long) {
-        viewModelScope.launch {
+        if (sendJob?.isActive == true) return
+        sendJob = viewModelScope.launch {
             val state = _uiState.value
             if (state.isSending || state.chatId == null) return@launch
 
@@ -311,21 +337,27 @@ class ChatViewModel(
 
             _uiState.update { it.copy(isSending = true, error = null) }
             runCatching {
-                sendMessageUseCase(
-                    chatId = state.chatId,
-                    input = userMessage.content,
-                    selectedModelId = state.selectedModelId,
-                    selectedRoleId = state.selectedRoleId,
-                    modelSettings = state.modelSettings,
-                    addUserMessage = false,
-                    parentMessageId = userMessage.id
-                )
+                withTimeout(SEND_TIMEOUT_MS) {
+                    sendMessageUseCase(
+                        chatId = state.chatId,
+                        input = userMessage.content,
+                        selectedModelId = state.selectedModelId,
+                        selectedRoleId = state.selectedRoleId,
+                        modelSettings = state.modelSettings,
+                        addUserMessage = false,
+                        parentMessageId = userMessage.id
+                    )
+                }
             }.onSuccess { newChatId ->
                 chatIdFlow.value = newChatId
                 _uiState.update {
                     it.copy(chatId = newChatId, isSending = false, error = null)
                 }
             }.onFailure { throwable ->
+                if (throwable is CancellationException) {
+                    _uiState.update { it.copy(isSending = false, error = null) }
+                    return@launch
+                }
                 val failedChatId = (throwable as? MessageSendFailedException)?.chatId
                 if (failedChatId != null) {
                     chatIdFlow.value = failedChatId
@@ -337,12 +369,16 @@ class ChatViewModel(
                         error = throwable.toUserMessage()
                     )
                 }
+            }.also {
+                _uiState.update { it.copy(isSending = false) }
+                sendJob = null
             }
         }
     }
 
     fun resendFromUserMessage(messageId: Long) {
-        viewModelScope.launch {
+        if (sendJob?.isActive == true) return
+        sendJob = viewModelScope.launch {
             val state = _uiState.value
             if (state.isSending || state.chatId == null) return@launch
 
@@ -355,21 +391,27 @@ class ChatViewModel(
 
             _uiState.update { it.copy(isSending = true, error = null) }
             runCatching {
-                sendMessageUseCase(
-                    chatId = state.chatId,
-                    input = userMessage.content,
-                    selectedModelId = state.selectedModelId,
-                    selectedRoleId = state.selectedRoleId,
-                    modelSettings = state.modelSettings,
-                    addUserMessage = false,
-                    parentMessageId = userMessage.id
-                )
+                withTimeout(SEND_TIMEOUT_MS) {
+                    sendMessageUseCase(
+                        chatId = state.chatId,
+                        input = userMessage.content,
+                        selectedModelId = state.selectedModelId,
+                        selectedRoleId = state.selectedRoleId,
+                        modelSettings = state.modelSettings,
+                        addUserMessage = false,
+                        parentMessageId = userMessage.id
+                    )
+                }
             }.onSuccess { newChatId ->
                 chatIdFlow.value = newChatId
                 _uiState.update {
                     it.copy(chatId = newChatId, isSending = false, error = null)
                 }
             }.onFailure { throwable ->
+                if (throwable is CancellationException) {
+                    _uiState.update { it.copy(isSending = false, error = null) }
+                    return@launch
+                }
                 val failedChatId = (throwable as? MessageSendFailedException)?.chatId
                 if (failedChatId != null) {
                     chatIdFlow.value = failedChatId
@@ -381,6 +423,9 @@ class ChatViewModel(
                         error = throwable.toUserMessage()
                     )
                 }
+            }.also {
+                _uiState.update { it.copy(isSending = false) }
+                sendJob = null
             }
         }
     }
@@ -542,6 +587,8 @@ class ChatViewModel(
     }
 
     companion object {
+        private const val SEND_TIMEOUT_MS = 360_000L
+
         fun factory(
             container: AppContainer,
             chatId: Long?

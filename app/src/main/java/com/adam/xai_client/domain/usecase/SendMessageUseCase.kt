@@ -7,6 +7,7 @@ import com.adam.xai_client.data.repository.RoleRepository
 import com.adam.xai_client.data.repository.SettingsRepository
 import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.MessageRole
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
 
 class SendMessageUseCase(
@@ -135,6 +136,10 @@ class SendMessageUseCase(
                     )
                 }
             }
+        } catch (exception: CancellationException) {
+            chatRepository.deleteMessage(assistantMessageId)
+            chatRepository.touchChat(targetChatId)
+            throw exception
         } catch (exception: Exception) {
             chatRepository.deleteMessage(assistantMessageId)
             chatRepository.touchChat(targetChatId)

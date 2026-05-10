@@ -16,7 +16,9 @@ import com.adam.xai_client.domain.model.VideoChatMessage
 import com.adam.xai_client.domain.model.VideoGenerationOptions
 import com.adam.xai_client.domain.model.XaiModelLimits
 import com.adam.xai_client.ui.components.toUserMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +58,7 @@ class VideoGenerationViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(VideoGenerationUiState())
     val uiState: StateFlow<VideoGenerationUiState> = _uiState.asStateFlow()
+    private var generationJob: Job? = null
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val selectedChatMessages = uiState
@@ -239,7 +242,8 @@ class VideoGenerationViewModel(
     }
 
     fun generate() {
-        viewModelScope.launch {
+        if (generationJob?.isActive == true) return
+        generationJob = viewModelScope.launch {
             val state = _uiState.value
             val prompt = state.prompt.trim()
             if (prompt.isBlank()) {
@@ -304,6 +308,19 @@ class VideoGenerationViewModel(
                     )
                 }
             }.onFailure { throwable ->
+                if (throwable is CancellationException) {
+                    _uiState.update {
+                        it.copy(
+                            isGenerating = false,
+                            generationProgress = null,
+                            generationStatus = null,
+                            generationRequestId = null,
+                            error = null,
+                            message = null
+                        )
+                    }
+                    return@launch
+                }
                 _uiState.update {
                     it.copy(
                         isGenerating = false,
@@ -312,12 +329,31 @@ class VideoGenerationViewModel(
                         error = throwable.toUserMessage()
                     )
                 }
+            }.also {
+                _uiState.update { it.copy(isGenerating = false) }
+                generationJob = null
             }
         }
     }
 
+    fun stopGeneration() {
+        generationJob?.cancel()
+        generationJob = null
+        _uiState.update {
+            it.copy(
+                isGenerating = false,
+                generationProgress = null,
+                generationStatus = null,
+                generationRequestId = null,
+                error = null,
+                message = null
+            )
+        }
+    }
+
     fun generateFromUserMessage(messageId: Long) {
-        viewModelScope.launch {
+        if (generationJob?.isActive == true) return
+        generationJob = viewModelScope.launch {
             val state = _uiState.value
             val chatId = state.selectedChatId ?: return@launch
             if (state.isGenerating) return@launch
@@ -364,6 +400,19 @@ class VideoGenerationViewModel(
                     )
                 }
             }.onFailure { throwable ->
+                if (throwable is CancellationException) {
+                    _uiState.update {
+                        it.copy(
+                            isGenerating = false,
+                            generationProgress = null,
+                            generationStatus = null,
+                            generationRequestId = null,
+                            error = null,
+                            message = null
+                        )
+                    }
+                    return@launch
+                }
                 _uiState.update {
                     it.copy(
                         isGenerating = false,
@@ -372,12 +421,16 @@ class VideoGenerationViewModel(
                         error = throwable.toUserMessage()
                     )
                 }
+            }.also {
+                _uiState.update { it.copy(isGenerating = false) }
+                generationJob = null
             }
         }
     }
 
     fun regenerateResponse(messageId: Long) {
-        viewModelScope.launch {
+        if (generationJob?.isActive == true) return
+        generationJob = viewModelScope.launch {
             val state = _uiState.value
             val chatId = state.selectedChatId ?: return@launch
             if (state.isGenerating) return@launch
@@ -425,6 +478,19 @@ class VideoGenerationViewModel(
                     )
                 }
             }.onFailure { throwable ->
+                if (throwable is CancellationException) {
+                    _uiState.update {
+                        it.copy(
+                            isGenerating = false,
+                            generationProgress = null,
+                            generationStatus = null,
+                            generationRequestId = null,
+                            error = null,
+                            message = null
+                        )
+                    }
+                    return@launch
+                }
                 _uiState.update {
                     it.copy(
                         isGenerating = false,
@@ -433,6 +499,9 @@ class VideoGenerationViewModel(
                         error = throwable.toUserMessage()
                     )
                 }
+            }.also {
+                _uiState.update { it.copy(isGenerating = false) }
+                generationJob = null
             }
         }
     }
