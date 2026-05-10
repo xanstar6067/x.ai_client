@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -61,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,8 +72,10 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -624,7 +628,14 @@ private fun ImageMessageCard(
 ) {
     var isDeleteConfirmationOpen by remember(message.id) { mutableStateOf(false) }
     var isTextEditOpen by remember(message.id) { mutableStateOf(false) }
-    var editedText by remember(message.id) { mutableStateOf(message.content) }
+    var editedText by rememberSaveable(message.id, stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(
+            TextFieldValue(
+                text = message.content,
+                selection = TextRange(message.content.length)
+            )
+        )
+    }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -636,12 +647,14 @@ private fun ImageMessageCard(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary
             )
-            Text(
-                text = message.content,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = if (message.generatedImage == null) Int.MAX_VALUE else 3,
-                overflow = TextOverflow.Ellipsis
-            )
+            SelectionContainer {
+                Text(
+                    text = message.content,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = if (message.generatedImage == null) Int.MAX_VALUE else 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             message.generatedImage?.let { image ->
                 ImagePreview(image = image)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -677,7 +690,10 @@ private fun ImageMessageCard(
                 if (message.role == MessageRole.USER) {
                     IconButton(
                         onClick = {
-                            editedText = message.content
+                            editedText = TextFieldValue(
+                                text = message.content,
+                                selection = TextRange(message.content.length)
+                            )
                             isTextEditOpen = true
                         },
                         enabled = !isGenerating
@@ -766,6 +782,7 @@ private fun ImageMessageCard(
                 OutlinedTextField(
                     value = editedText,
                     onValueChange = { editedText = it },
+                    modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
                     maxLines = 10
                 )
@@ -773,10 +790,10 @@ private fun ImageMessageCard(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        onUpdateUserMessage(editedText)
+                        onUpdateUserMessage(editedText.text)
                         isTextEditOpen = false
                     },
-                    enabled = editedText.isNotBlank()
+                    enabled = editedText.text.isNotBlank()
                 ) {
                     Text("Сохранить")
                 }
