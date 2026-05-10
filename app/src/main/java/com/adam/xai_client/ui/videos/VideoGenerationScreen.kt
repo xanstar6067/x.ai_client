@@ -85,6 +85,8 @@ import com.adam.xai_client.ui.components.DropdownSelector
 import com.adam.xai_client.ui.components.ModelInfoDialog
 import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
+import com.adam.xai_client.ui.haptics.UiHapticSignal
+import com.adam.xai_client.ui.haptics.rememberHapticClick
 import java.io.File
 import java.text.DateFormat
 import java.util.Date
@@ -125,6 +127,10 @@ fun VideoGenerationScreen(
     var chatPendingDeletion by remember { mutableStateOf<VideoChat?>(null) }
     var chatPendingDuplication by remember { mutableStateOf<VideoChat?>(null) }
     val isChatOpen = state.selectedChatId != null || state.isNewChatMode
+    val hapticBack = rememberHapticClick(if (isChatOpen) onShowChatList else onBack)
+    val hapticModelInfoOpen = rememberHapticClick { onModelInfoOpenChange(true) }
+    val hapticVideoSettingsOpen = rememberHapticClick { onVideoSettingsOpenChange(true) }
+    val hapticNewChat = rememberHapticClick(UiHapticSignal.Confirm, onNewChat)
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -156,19 +162,19 @@ fun VideoGenerationScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = if (isChatOpen) onShowChatList else onBack) {
+                    IconButton(onClick = hapticBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 },
                 actions = {
                     IconButton(
-                        onClick = { onModelInfoOpenChange(true) },
+                        onClick = hapticModelInfoOpen,
                         enabled = isChatOpen && state.selectedModelId != null
                     ) {
                         Icon(Icons.Filled.Info, contentDescription = "Лимиты модели")
                     }
                     IconButton(
-                        onClick = { onVideoSettingsOpenChange(true) },
+                        onClick = hapticVideoSettingsOpen,
                         enabled = isChatOpen && state.selectedModelId != null
                     ) {
                         Icon(Icons.Default.Settings, contentDescription = "Настройки генерации")
@@ -179,7 +185,7 @@ fun VideoGenerationScreen(
         floatingActionButton = {
             if (!isChatOpen) {
                 FloatingActionButton(
-                    onClick = onNewChat,
+                    onClick = hapticNewChat,
                     modifier = Modifier.navigationBarsPadding()
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Новый видеочат")
@@ -243,6 +249,11 @@ fun VideoGenerationScreen(
     }
 
     chatPendingDeletion?.let { chat ->
+        val confirmDelete = rememberHapticClick(UiHapticSignal.Destructive) {
+            onDeleteChat(chat.id)
+            chatPendingDeletion = null
+        }
+        val cancelDelete = rememberHapticClick { chatPendingDeletion = null }
         AlertDialog(
             onDismissRequest = { chatPendingDeletion = null },
             title = { Text("Удалить чат?") },
@@ -251,16 +262,13 @@ fun VideoGenerationScreen(
             },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        onDeleteChat(chat.id)
-                        chatPendingDeletion = null
-                    }
+                    onClick = confirmDelete
                 ) {
                     Text("Удалить")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { chatPendingDeletion = null }) {
+                TextButton(onClick = cancelDelete) {
                     Text("Отмена")
                 }
             }
@@ -268,22 +276,24 @@ fun VideoGenerationScreen(
     }
 
     chatPendingDuplication?.let { chat ->
+        val confirmDuplicate = rememberHapticClick(UiHapticSignal.Confirm) {
+            onDuplicateChat(chat.id)
+            chatPendingDuplication = null
+        }
+        val cancelDuplicate = rememberHapticClick { chatPendingDuplication = null }
         AlertDialog(
             onDismissRequest = { chatPendingDuplication = null },
             title = { Text("Скопировать чат?") },
             text = { Text("Будет создана копия чата \"${chat.title}\" со всеми сообщениями.") },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        onDuplicateChat(chat.id)
-                        chatPendingDuplication = null
-                    }
+                    onClick = confirmDuplicate
                 ) {
                     Text("Скопировать")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { chatPendingDuplication = null }) {
+                TextButton(onClick = cancelDuplicate) {
                     Text("Отмена")
                 }
             }
@@ -350,9 +360,12 @@ private fun VideoChatCard(
     onDelete: () -> Unit
 ) {
     val dateFormat = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT) }
+    val hapticClick = rememberHapticClick(onClick)
+    val hapticDuplicate = rememberHapticClick(UiHapticSignal.Confirm, onDuplicate)
+    val hapticDelete = rememberHapticClick(UiHapticSignal.Destructive, onDelete)
 
     Card(
-        onClick = onClick,
+        onClick = hapticClick,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -376,10 +389,10 @@ private fun VideoChatCard(
                 )
             }
             Spacer(modifier = Modifier.padding(start = 8.dp))
-            IconButton(onClick = onDuplicate) {
+            IconButton(onClick = hapticDuplicate) {
                 Icon(Icons.Default.ContentCopy, contentDescription = "Скопировать чат")
             }
-            IconButton(onClick = onDelete) {
+            IconButton(onClick = hapticDelete) {
                 Icon(Icons.Default.Delete, contentDescription = "Удалить чат")
             }
         }
@@ -510,6 +523,7 @@ private fun VideoSettingsDialog(
     onResolutionChange: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val hapticDismiss = rememberHapticClick(onDismiss)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Настройки генерации") },
@@ -542,7 +556,7 @@ private fun VideoSettingsDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = hapticDismiss) {
                 Text("Готово")
             }
         }
@@ -562,6 +576,10 @@ private fun VideoPromptBar(
         keyboardController?.hide()
         onGenerate()
     }
+    val hapticGenerateOrStop = rememberHapticClick(
+        if (state.isGenerating) UiHapticSignal.Destructive else UiHapticSignal.Confirm,
+        if (state.isGenerating) onStopGeneration else generateAndHideKeyboard
+    )
 
     Column(
         modifier = Modifier
@@ -600,7 +618,7 @@ private fun VideoPromptBar(
                 modifier = Modifier.weight(1f)
             )
             IconButton(
-                onClick = if (state.isGenerating) onStopGeneration else generateAndHideKeyboard,
+                onClick = hapticGenerateOrStop,
                 enabled = state.isGenerating ||
                     (state.prompt.isNotBlank() && state.selectedModelId != null),
                 modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
@@ -639,6 +657,32 @@ private fun VideoMessageCard(
             )
         )
     }
+    val hapticSave = rememberHapticClick(UiHapticSignal.Confirm, onSave)
+    val hapticOpenTextEdit = rememberHapticClick {
+        editedText = TextFieldValue(
+            text = message.content,
+            selection = TextRange(message.content.length)
+        )
+        isTextEditOpen = true
+    }
+    val hapticRequestDelete = rememberHapticClick(UiHapticSignal.Destructive) {
+        isDeleteConfirmationOpen = true
+    }
+    val hapticCopy = rememberHapticClick(onCopy)
+    val hapticRegenerate = rememberHapticClick(UiHapticSignal.Confirm, onRegenerate)
+    val hapticPreviousVersion = rememberHapticClick(UiHapticSignal.Selection, onPreviousVersion)
+    val hapticNextVersion = rememberHapticClick(UiHapticSignal.Selection, onNextVersion)
+    val hapticGenerateFromUser = rememberHapticClick(UiHapticSignal.Confirm, onGenerateFromUser)
+    val confirmDelete = rememberHapticClick(UiHapticSignal.Destructive) {
+        isDeleteConfirmationOpen = false
+        onDelete()
+    }
+    val cancelDelete = rememberHapticClick { isDeleteConfirmationOpen = false }
+    val confirmTextEdit = rememberHapticClick(UiHapticSignal.Confirm) {
+        onUpdateUserMessage(editedText.text)
+        isTextEditOpen = false
+    }
+    val cancelTextEdit = rememberHapticClick { isTextEditOpen = false }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -671,7 +715,7 @@ private fun VideoMessageCard(
                 VideoPreview(video = video, aspectRatio = message.aspectRatio)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(
-                        onClick = onSave,
+                        onClick = hapticSave,
                         enabled = !isSaving
                     ) {
                         if (isSaving) {
@@ -696,32 +740,26 @@ private fun VideoMessageCard(
             ) {
                 if (message.role == MessageRole.USER) {
                     IconButton(
-                        onClick = {
-                            editedText = TextFieldValue(
-                                text = message.content,
-                                selection = TextRange(message.content.length)
-                            )
-                            isTextEditOpen = true
-                        },
+                        onClick = hapticOpenTextEdit,
                         enabled = !isGenerating
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = "Редактировать")
                     }
                 }
                 IconButton(
-                    onClick = { isDeleteConfirmationOpen = true },
+                    onClick = hapticRequestDelete,
                     enabled = !isGenerating
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = "Удалить")
                 }
                 if (message.content.isNotBlank()) {
-                    IconButton(onClick = onCopy) {
+                    IconButton(onClick = hapticCopy) {
                         Icon(Icons.Default.ContentCopy, contentDescription = "Копировать")
                     }
                 }
                 if (message.role == MessageRole.ASSISTANT) {
                     IconButton(
-                        onClick = onRegenerate,
+                        onClick = hapticRegenerate,
                         enabled = !isGenerating
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Сгенерировать заново")
@@ -734,13 +772,13 @@ private fun VideoMessageCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     IconButton(
-                        onClick = onPreviousVersion,
+                        onClick = hapticPreviousVersion,
                         enabled = !isGenerating
                     ) {
                         Icon(Icons.Default.ChevronLeft, contentDescription = "Предыдущая версия")
                     }
                     IconButton(
-                        onClick = onNextVersion,
+                        onClick = hapticNextVersion,
                         enabled = !isGenerating
                     ) {
                         Icon(Icons.Default.ChevronRight, contentDescription = "Следующая версия")
@@ -748,7 +786,7 @@ private fun VideoMessageCard(
                 }
                 if (message.role == MessageRole.USER) {
                     IconButton(
-                        onClick = onGenerateFromUser,
+                        onClick = hapticGenerateFromUser,
                         enabled = !isGenerating
                     ) {
                         Icon(Icons.Default.ArrowDownward, contentDescription = "Отправить снова")
@@ -765,16 +803,13 @@ private fun VideoMessageCard(
             text = { Text("Сообщение будет удалено без восстановления.") },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        isDeleteConfirmationOpen = false
-                        onDelete()
-                    }
+                    onClick = confirmDelete
                 ) {
                     Text("Удалить")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { isDeleteConfirmationOpen = false }) {
+                TextButton(onClick = cancelDelete) {
                     Text("Отмена")
                 }
             }
@@ -796,17 +831,14 @@ private fun VideoMessageCard(
             },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        onUpdateUserMessage(editedText.text)
-                        isTextEditOpen = false
-                    },
+                    onClick = confirmTextEdit,
                     enabled = editedText.text.isNotBlank()
                 ) {
                     Text("Сохранить")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { isTextEditOpen = false }) {
+                TextButton(onClick = cancelTextEdit) {
                     Text("Отмена")
                 }
             }

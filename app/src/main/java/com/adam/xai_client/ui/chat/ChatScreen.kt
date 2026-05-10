@@ -66,6 +66,9 @@ import com.adam.xai_client.ui.components.MessageBubble
 import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
 import com.adam.xai_client.ui.haptics.StreamingResponseHaptics
+import com.adam.xai_client.ui.haptics.UiHapticSignal
+import com.adam.xai_client.ui.haptics.rememberHapticClick
+import com.adam.xai_client.ui.haptics.rememberHapticValueChange
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,6 +102,9 @@ fun ChatScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val clipboardManager = LocalClipboardManager.current
+    val hapticBack = rememberHapticClick(onBack)
+    val hapticModelInfoOpen = rememberHapticClick { onModelInfoOpenChange(true) }
+    val hapticModelSettingsOpen = rememberHapticClick { onModelSettingsOpenChange(true) }
     TransientSnackbar(
         message = state.error,
         snackbarHostState = snackbarHostState,
@@ -151,19 +157,19 @@ fun ChatScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = hapticBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 },
                 actions = {
                     IconButton(
-                        onClick = { onModelInfoOpenChange(true) },
+                        onClick = hapticModelInfoOpen,
                         enabled = state.selectedModelId != null
                     ) {
                         Icon(Icons.Filled.Info, contentDescription = "Лимиты модели")
                     }
                     IconButton(
-                        onClick = { onModelSettingsOpenChange(true) },
+                        onClick = hapticModelSettingsOpen,
                         enabled = state.selectedModelId != null
                     ) {
                         Icon(Icons.Filled.Settings, contentDescription = "Настройки модели")
@@ -343,10 +349,17 @@ private fun ChatInput(
     onStopSending: () -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
+    val toggleWebSearch = rememberHapticClick(UiHapticSignal.Toggle) {
+        onWebSearchEnabledChange(!webSearchEnabled)
+    }
     val sendAndHideKeyboard = {
         keyboardController?.hide()
         onSend()
     }
+    val hapticSendOrStop = rememberHapticClick(
+        if (isSending) UiHapticSignal.Destructive else UiHapticSignal.Confirm,
+        if (isSending) onStopSending else sendAndHideKeyboard
+    )
 
     Row(
         modifier = Modifier
@@ -369,7 +382,7 @@ private fun ChatInput(
             maxLines = 6,
             trailingIcon = {
                 IconButton(
-                    onClick = { onWebSearchEnabledChange(!webSearchEnabled) },
+                    onClick = toggleWebSearch,
                     enabled = !isSending
                 ) {
                     Icon(
@@ -390,7 +403,7 @@ private fun ChatInput(
         )
         IconButton(
             modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
-            onClick = if (isSending) onStopSending else sendAndHideKeyboard,
+            onClick = hapticSendOrStop,
             enabled = isSending || inputText.isNotBlank()
         ) {
             if (isSending) {
@@ -408,6 +421,7 @@ private fun ModelInfoDialog(
     limits: ModelLimits?,
     onDismiss: () -> Unit
 ) {
+    val hapticDismiss = rememberHapticClick(onDismiss)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(modelId ?: "Модель") },
@@ -445,7 +459,7 @@ private fun ModelInfoDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = hapticDismiss) {
                 Text("ОК")
             }
         }
@@ -475,6 +489,11 @@ private fun ModelSettingsDialog(
     onContextMessageLimitChange: (Int) -> Unit,
     onReset: () -> Unit
 ) {
+    val hapticDismiss = rememberHapticClick(onDismiss)
+    val hapticReset = rememberHapticClick(UiHapticSignal.Destructive, onReset)
+    val hapticReasoningReset = rememberHapticClick(UiHapticSignal.Destructive) {
+        onReasoningEffortChange(null)
+    }
     val maxContext = limits?.contextWindowTokens ?: 131_072
     val normalizedModelId = modelId.orEmpty().lowercase()
     val isGrok420MultiAgent = normalizedModelId.startsWith("grok-4.20-multi-agent")
@@ -516,7 +535,7 @@ private fun ModelSettingsDialog(
                         onOptionSelected = onReasoningEffortChange,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    TextButton(onClick = { onReasoningEffortChange(null) }) {
+                    TextButton(onClick = hapticReasoningReset) {
                         Text(
                             if (isGrok420MultiAgent) {
                                 "Сбросить выбор агентов"
@@ -595,19 +614,19 @@ private fun ModelSettingsDialog(
                         onOptionSelected = onReasoningEffortChange,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    TextButton(onClick = { onReasoningEffortChange(null) }) {
+                    TextButton(onClick = hapticReasoningReset) {
                         Text("Сбросить глубину рассуждения")
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = hapticDismiss) {
                 Text("Готово")
             }
         },
         dismissButton = {
-            TextButton(onClick = onReset) {
+            TextButton(onClick = hapticReset) {
                 Icon(Icons.Filled.RestartAlt, contentDescription = null)
                 Spacer(Modifier.padding(2.dp))
                 Text("Сброс")
@@ -621,6 +640,9 @@ private fun ContextMessageLimitSetting(
     value: Int,
     onValueChange: (Int) -> Unit
 ) {
+    val hapticValueChange = rememberHapticValueChange<Float>(UiHapticSignal.Selection) { raw ->
+        onValueChange(raw.roundToInt().coerceIn(0, 99))
+    }
     Column {
         Text("Сообщений в контексте", style = MaterialTheme.typography.labelLarge)
         Text(
@@ -630,7 +652,7 @@ private fun ContextMessageLimitSetting(
         )
         Slider(
             value = value.toFloat(),
-            onValueChange = { raw -> onValueChange(raw.roundToInt().coerceIn(0, 99)) },
+            onValueChange = hapticValueChange,
             valueRange = 0f..99f,
             steps = 98
         )
@@ -669,6 +691,13 @@ private fun SliderSetting(
 ) {
     val enabled = value != null
     val sliderValue = (value ?: defaultValue).toFloat()
+    val hapticEnabledChange = rememberHapticValueChange<Boolean> { checked ->
+        onValueChange(if (checked) defaultValue else null)
+    }
+    val hapticSliderChange = rememberHapticValueChange<Float>(UiHapticSignal.Selection) { raw ->
+        val rounded = (raw * 100).roundToInt() / 100.0
+        onValueChange(rounded)
+    }
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -676,9 +705,7 @@ private fun SliderSetting(
         ) {
             Checkbox(
                 checked = enabled,
-                onCheckedChange = { checked ->
-                    onValueChange(if (checked) defaultValue else null)
-                }
+                onCheckedChange = hapticEnabledChange
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(label, style = MaterialTheme.typography.labelLarge)
@@ -691,10 +718,7 @@ private fun SliderSetting(
         }
         Slider(
             value = sliderValue,
-            onValueChange = { raw ->
-                val rounded = (raw * 100).roundToInt() / 100.0
-                onValueChange(rounded)
-            },
+            onValueChange = hapticSliderChange,
             enabled = enabled,
             valueRange = valueRange,
             steps = steps

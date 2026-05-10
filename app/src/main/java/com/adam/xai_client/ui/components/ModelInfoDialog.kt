@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.ModelLimits
 import com.adam.xai_client.domain.model.XaiModelLimits
+import com.adam.xai_client.ui.haptics.rememberHapticClick
 
 @Composable
 fun ModelInfoDialog(
@@ -21,6 +22,7 @@ fun ModelInfoDialog(
     limits: ModelLimits?,
     onDismiss: () -> Unit
 ) {
+    val hapticDismiss = rememberHapticClick(onDismiss)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(modelId ?: "Модель") },
@@ -58,7 +60,7 @@ fun ModelInfoDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = hapticDismiss) {
                 Text("ОК")
             }
         }

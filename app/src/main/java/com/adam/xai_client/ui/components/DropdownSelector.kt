@@ -22,6 +22,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.adam.xai_client.ui.haptics.UiHapticSignal
+import com.adam.xai_client.ui.haptics.rememberHapticClick
 
 @Composable
 fun <T> DropdownSelector(
@@ -35,11 +37,12 @@ fun <T> DropdownSelector(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selectedText = selectedOption?.let(optionLabel) ?: label
+    val openMenu = rememberHapticClick(UiHapticSignal.Selection) { expanded = true }
 
     OutlinedButton(
         modifier = modifier,
         enabled = enabled && options.isNotEmpty(),
-        onClick = { expanded = true },
+        onClick = openMenu,
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Row(
@@ -63,6 +66,10 @@ fun <T> DropdownSelector(
         ) {
             options.forEach { option ->
                 val selected = option == selectedOption
+                val selectOption = rememberHapticClick(UiHapticSignal.Selection) {
+                    expanded = false
+                    onOptionSelected(option)
+                }
                 DropdownMenuItem(
                     text = {
                         Text(
@@ -87,10 +94,7 @@ fun <T> DropdownSelector(
                     } else {
                         null
                     },
-                    onClick = {
-                        expanded = false
-                        onOptionSelected(option)
-                    },
+                    onClick = selectOption,
                     colors = MenuDefaults.itemColors(
                         textColor = if (selected) {
                             MaterialTheme.colorScheme.primary

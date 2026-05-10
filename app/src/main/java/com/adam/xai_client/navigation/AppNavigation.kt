@@ -1,6 +1,7 @@
 package com.adam.xai_client.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -15,6 +16,7 @@ import com.adam.xai_client.ui.chat.ChatScreen
 import com.adam.xai_client.ui.chat.ChatViewModel
 import com.adam.xai_client.ui.chatlist.ChatListScreen
 import com.adam.xai_client.ui.chatlist.ChatListViewModel
+import com.adam.xai_client.ui.haptics.LocalUiHapticsEnabled
 import com.adam.xai_client.ui.images.ImageGenerationScreen
 import com.adam.xai_client.ui.images.ImageGenerationViewModel
 import com.adam.xai_client.ui.models.ModelsScreen
@@ -29,11 +31,15 @@ import com.adam.xai_client.ui.videos.VideoGenerationViewModel
 @Composable
 fun XaiChatNavHost(container: AppContainer) {
     val navController = rememberNavController()
+    val uiHapticsEnabled = container.settingsRepository.uiHapticsEnabled
+        .collectAsStateWithLifecycle(initialValue = true)
+        .value
 
-    NavHost(
-        navController = navController,
-        startDestination = Screen.ChatList.route
-    ) {
+    CompositionLocalProvider(LocalUiHapticsEnabled provides uiHapticsEnabled) {
+        NavHost(
+            navController = navController,
+            startDestination = Screen.ChatList.route
+        ) {
         composable(Screen.ChatList.route) {
             val viewModel: ChatListViewModel = viewModel(
                 factory = ChatListViewModel.factory(container)
@@ -137,6 +143,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 onApiKeyChange = viewModel::onApiKeyChange,
                 onBaseUrlChange = viewModel::onBaseUrlChange,
                 onStreamingHapticsChange = viewModel::onStreamingHapticsChange,
+                onUiHapticsChange = viewModel::onUiHapticsChange,
                 onSave = viewModel::save,
                 onCheckConnection = viewModel::checkConnection,
                 onBack = { navController.popBackStack() },
@@ -255,6 +262,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 onBack = { navController.popBackStack() },
                 onMessageShown = viewModel::clearTransientMessages
             )
+        }
         }
     }
 }

@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.ModelRole
 import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
+import com.adam.xai_client.ui.haptics.UiHapticSignal
+import com.adam.xai_client.ui.haptics.rememberHapticClick
 
 private data class RoleEditorState(
     val id: Long? = null,
@@ -61,6 +63,10 @@ fun RolesScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var editorState by remember { mutableStateOf<RoleEditorState?>(null) }
+    val hapticBack = rememberHapticClick(onBack)
+    val hapticNewRole = rememberHapticClick(UiHapticSignal.Confirm) {
+        editorState = RoleEditorState()
+    }
     TransientSnackbar(
         message = state.error ?: state.message,
         snackbarHostState = snackbarHostState,
@@ -73,7 +79,7 @@ fun RolesScreen(
             TopAppBar(
                 title = { Text("Роли") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = hapticBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 }
@@ -81,7 +87,7 @@ fun RolesScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { editorState = RoleEditorState() }
+                onClick = hapticNewRole
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Новая роль")
             }
@@ -155,6 +161,9 @@ private fun RoleRow(
     onDelete: () -> Unit,
     onSetDefault: () -> Unit
 ) {
+    val hapticEdit = rememberHapticClick(onEdit)
+    val hapticDelete = rememberHapticClick(UiHapticSignal.Destructive, onDelete)
+    val hapticSetDefault = rememberHapticClick(UiHapticSignal.Selection, onSetDefault)
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -167,7 +176,7 @@ private fun RoleRow(
             ) {
                 RadioButton(
                     selected = role.isDefault,
-                    onClick = onSetDefault
+                    onClick = hapticSetDefault
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -184,11 +193,11 @@ private fun RoleRow(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                IconButton(onClick = onEdit) {
+                IconButton(onClick = hapticEdit) {
                     Icon(Icons.Default.Edit, contentDescription = "Редактировать роль")
                 }
                 IconButton(
-                    onClick = onDelete,
+                    onClick = hapticDelete,
                     enabled = !role.isBuiltIn
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = "Удалить роль")
@@ -212,6 +221,8 @@ private fun RoleEditorDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
+    val hapticDismiss = rememberHapticClick(onDismiss)
+    val hapticConfirm = rememberHapticClick(UiHapticSignal.Confirm, onConfirm)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -236,12 +247,12 @@ private fun RoleEditorDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
+            TextButton(onClick = hapticConfirm) {
                 Text("Сохранить")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = hapticDismiss) {
                 Text("Отмена")
             }
         }

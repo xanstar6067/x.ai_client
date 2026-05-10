@@ -20,6 +20,7 @@ data class SettingsUiState(
     val apiKey: String = "",
     val baseUrl: String = ApiSettings.DEFAULT_BASE_URL,
     val streamingHapticsEnabled: Boolean = true,
+    val uiHapticsEnabled: Boolean = true,
     val isCheckingConnection: Boolean = false,
     val error: String? = null,
     val message: String? = null
@@ -48,6 +49,11 @@ class SettingsViewModel(
                 _uiState.update { it.copy(streamingHapticsEnabled = enabled) }
             }
         }
+        viewModelScope.launch {
+            settingsRepository.uiHapticsEnabled.collect { enabled ->
+                _uiState.update { it.copy(uiHapticsEnabled = enabled) }
+            }
+        }
     }
 
     fun onApiKeyChange(value: String) {
@@ -62,6 +68,13 @@ class SettingsViewModel(
         _uiState.update { it.copy(streamingHapticsEnabled = enabled, error = null, message = null) }
         viewModelScope.launch {
             settingsRepository.setStreamingHapticsEnabled(enabled)
+        }
+    }
+
+    fun onUiHapticsChange(enabled: Boolean) {
+        _uiState.update { it.copy(uiHapticsEnabled = enabled, error = null, message = null) }
+        viewModelScope.launch {
+            settingsRepository.setUiHapticsEnabled(enabled)
         }
     }
 

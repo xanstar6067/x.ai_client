@@ -12,6 +12,7 @@ class SettingsRepository(
     val lastSelectedModelId: Flow<String?> = settingsDataStore.lastSelectedModelId
     val lastSelectedRoleId: Flow<Long?> = settingsDataStore.lastSelectedRoleId
     val streamingHapticsEnabled: Flow<Boolean> = settingsDataStore.streamingHapticsEnabled
+    val uiHapticsEnabled: Flow<Boolean> = settingsDataStore.uiHapticsEnabled
 
     suspend fun currentApiSettings(): ApiSettings = apiSettings.first()
 
@@ -29,5 +30,9 @@ class SettingsRepository(
 
     suspend fun setStreamingHapticsEnabled(enabled: Boolean) {
         settingsDataStore.setStreamingHapticsEnabled(enabled)
+    }
+
+    suspend fun setUiHapticsEnabled(enabled: Boolean) {
+        settingsDataStore.setUiHapticsEnabled(enabled)
     }
 }

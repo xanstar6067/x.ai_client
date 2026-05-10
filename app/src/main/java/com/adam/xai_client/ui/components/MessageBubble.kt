@@ -42,6 +42,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.MessageRole
+import com.adam.xai_client.ui.haptics.UiHapticSignal
+import com.adam.xai_client.ui.haptics.rememberHapticClick
 
 @Composable
 fun MessageBubble(
@@ -88,6 +90,31 @@ fun MessageBubble(
             )
         )
     }
+    val openEdit = rememberHapticClick {
+        editedText = TextFieldValue(
+            text = message.content,
+            selection = TextRange(message.content.length)
+        )
+        isEditing = true
+    }
+    val requestDelete = rememberHapticClick(UiHapticSignal.Destructive) {
+        isDeleteConfirmationOpen = true
+    }
+    val copyMessage = rememberHapticClick { onCopy(copyText) }
+    val hapticRegenerate = rememberHapticClick(UiHapticSignal.Confirm, onRegenerate)
+    val hapticResend = rememberHapticClick(UiHapticSignal.Confirm, onResend)
+    val hapticPreviousVersion = rememberHapticClick(UiHapticSignal.Selection, onPreviousVersion)
+    val hapticNextVersion = rememberHapticClick(UiHapticSignal.Selection, onNextVersion)
+    val saveEdit = rememberHapticClick(UiHapticSignal.Confirm) {
+        onEdit(editedText.text)
+        isEditing = false
+    }
+    val cancelEdit = rememberHapticClick { isEditing = false }
+    val confirmDelete = rememberHapticClick(UiHapticSignal.Destructive) {
+        isDeleteConfirmationOpen = false
+        onDelete()
+    }
+    val cancelDelete = rememberHapticClick { isDeleteConfirmationOpen = false }
 
     LaunchedEffect(message.id, message.content.isNotBlank(), isPending) {
         if (!isPending && message.content.isNotBlank()) {
@@ -156,41 +183,33 @@ fun MessageBubble(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (canEdit) {
-                                IconButton(
-                                    onClick = {
-                                        editedText = TextFieldValue(
-                                            text = message.content,
-                                            selection = TextRange(message.content.length)
-                                        )
-                                        isEditing = true
-                                    }
-                                ) {
+                                IconButton(onClick = openEdit) {
                                     Icon(Icons.Filled.Edit, contentDescription = "Редактировать")
                                 }
                             }
-                            IconButton(onClick = { isDeleteConfirmationOpen = true }) {
+                            IconButton(onClick = requestDelete) {
                                 Icon(Icons.Filled.Delete, contentDescription = "Удалить")
                             }
                             if (copyText.isNotBlank()) {
-                                IconButton(onClick = { onCopy(copyText) }) {
+                                IconButton(onClick = copyMessage) {
                                     Icon(Icons.Filled.ContentCopy, contentDescription = "Копировать")
                                 }
                             }
                             if (canRegenerate) {
-                                IconButton(onClick = onRegenerate) {
+                                IconButton(onClick = hapticRegenerate) {
                                     Icon(Icons.Filled.Refresh, contentDescription = "Сгенерировать заново")
                                 }
                             }
                             if (!isPending && message.versionCount > 1) {
-                                IconButton(onClick = onPreviousVersion) {
+                                IconButton(onClick = hapticPreviousVersion) {
                                     Icon(Icons.Filled.ChevronLeft, contentDescription = "Предыдущая версия")
                                 }
-                                IconButton(onClick = onNextVersion) {
+                                IconButton(onClick = hapticNextVersion) {
                                     Icon(Icons.Filled.ChevronRight, contentDescription = "Следующая версия")
                                 }
                             }
                             if (canResend) {
-                                IconButton(onClick = onResend) {
+                                IconButton(onClick = hapticResend) {
                                     Icon(Icons.Filled.ArrowDownward, contentDescription = "Отправить снова")
                                 }
                             }
@@ -216,17 +235,14 @@ fun MessageBubble(
             },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        onEdit(editedText.text)
-                        isEditing = false
-                    },
+                    onClick = saveEdit,
                     enabled = editedText.text.isNotBlank()
                 ) {
                     Text("Сохранить")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { isEditing = false }) {
+                TextButton(onClick = cancelEdit) {
                     Text("Отмена")
                 }
             }
@@ -240,16 +256,13 @@ fun MessageBubble(
             text = { Text("Сообщение будет удалено безвозвратно.") },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        isDeleteConfirmationOpen = false
-                        onDelete()
-                    }
+                    onClick = confirmDelete
                 ) {
                     Text("Удалить")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { isDeleteConfirmationOpen = false }) {
+                TextButton(onClick = cancelDelete) {
                     Text("Отмена")
                 }
             }
@@ -265,6 +278,8 @@ private fun ReasoningBlock(
     onToggle: () -> Unit,
     onCopy: () -> Unit
 ) {
+    val copyReasoning = rememberHapticClick(onCopy)
+    val toggleReasoning = rememberHapticClick(UiHapticSignal.Toggle, onToggle)
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -276,14 +291,14 @@ private fun ReasoningBlock(
                 color = textColor.copy(alpha = 0.78f),
                 modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = onCopy) {
+            IconButton(onClick = copyReasoning) {
                 Icon(
                     Icons.Filled.ContentCopy,
                     contentDescription = "Копировать рассуждение",
                     tint = textColor.copy(alpha = 0.78f)
                 )
             }
-            IconButton(onClick = onToggle) {
+            IconButton(onClick = toggleReasoning) {
                 Icon(
                     if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                     contentDescription = if (isExpanded) "Свернуть рассуждение" else "Показать рассуждение",

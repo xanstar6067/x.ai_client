@@ -35,6 +35,9 @@ import com.adam.xai_client.domain.model.toUsdPerImage
 import com.adam.xai_client.domain.model.toUsdPerMillionTokens
 import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
+import com.adam.xai_client.ui.haptics.UiHapticSignal
+import com.adam.xai_client.ui.haptics.rememberHapticClick
+import com.adam.xai_client.ui.haptics.rememberHapticValueChange
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +49,8 @@ fun ModelsScreen(
     onMessageShown: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    val hapticBack = rememberHapticClick(onBack)
+    val hapticRefresh = rememberHapticClick(UiHapticSignal.Confirm, onRefresh)
     TransientSnackbar(
         message = state.error ?: state.message,
         snackbarHostState = snackbarHostState,
@@ -58,7 +63,7 @@ fun ModelsScreen(
             TopAppBar(
                 title = { Text("Модели") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = hapticBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 }
@@ -78,7 +83,7 @@ fun ModelsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
-                    onClick = onRefresh,
+                    onClick = hapticRefresh,
                     enabled = !state.isLoading,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -129,6 +134,7 @@ private fun ModelRow(
     model: AiModel,
     onToggle: (Boolean) -> Unit
 ) {
+    val hapticToggle = rememberHapticValueChange(onToggle)
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -162,7 +168,7 @@ private fun ModelRow(
             }
             Switch(
                 checked = model.isEnabledForChat,
-                onCheckedChange = onToggle
+                onCheckedChange = hapticToggle
             )
         }
     }

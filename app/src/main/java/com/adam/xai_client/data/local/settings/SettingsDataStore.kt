@@ -41,6 +41,9 @@ class SettingsDataStore(private val context: Context) {
     val streamingHapticsEnabled: Flow<Boolean> = context.xaiSettingsDataStore.data
         .map { preferences -> preferences[STREAMING_HAPTICS_ENABLED] ?: true }
 
+    val uiHapticsEnabled: Flow<Boolean> = context.xaiSettingsDataStore.data
+        .map { preferences -> preferences[UI_HAPTICS_ENABLED] ?: true }
+
     suspend fun saveApiSettings(apiKey: String, baseUrl: String) {
         context.xaiSettingsDataStore.edit { preferences ->
             preferences[API_KEY] = apiKey.trim()
@@ -74,11 +77,18 @@ class SettingsDataStore(private val context: Context) {
         }
     }
 
+    suspend fun setUiHapticsEnabled(enabled: Boolean) {
+        context.xaiSettingsDataStore.edit { preferences ->
+            preferences[UI_HAPTICS_ENABLED] = enabled
+        }
+    }
+
     private companion object {
         val API_KEY = stringPreferencesKey("api_key")
         val BASE_URL = stringPreferencesKey("base_url")
         val LAST_SELECTED_MODEL_ID = stringPreferencesKey("last_selected_model_id")
         val LAST_SELECTED_ROLE_ID = longPreferencesKey("last_selected_role_id")
         val STREAMING_HAPTICS_ENABLED = booleanPreferencesKey("streaming_haptics_enabled")
+        val UI_HAPTICS_ENABLED = booleanPreferencesKey("ui_haptics_enabled")
     }
 }

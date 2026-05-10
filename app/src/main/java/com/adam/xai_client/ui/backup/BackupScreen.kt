@@ -41,6 +41,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
+import com.adam.xai_client.ui.haptics.UiHapticSignal
+import com.adam.xai_client.ui.haptics.rememberHapticClick
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,11 +55,17 @@ fun BackupScreen(
 ) {
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val hapticBack = rememberHapticClick(onBack)
+    val hapticExport = rememberHapticClick(UiHapticSignal.Confirm, onExport)
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let(onImport)
     }
+    val hapticImport = rememberHapticClick(UiHapticSignal.Confirm) {
+        importLauncher.launch(arrayOf("application/zip", "application/json", "text/*"))
+    }
+    val hapticOpenFolder = rememberHapticClick { openBackupFolder(context) }
 
     TransientSnackbar(
         message = state.error ?: state.message,
@@ -71,7 +79,7 @@ fun BackupScreen(
             TopAppBar(
                 title = { Text("Резервное копирование и восстановление") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = hapticBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 }
@@ -104,7 +112,7 @@ fun BackupScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
-                    onClick = onExport,
+                    onClick = hapticExport,
                     enabled = !state.isBusy,
                     modifier = Modifier.weight(1f)
                 ) {
@@ -113,7 +121,7 @@ fun BackupScreen(
                     Text("Экспорт")
                 }
                 Button(
-                    onClick = { importLauncher.launch(arrayOf("application/zip", "application/json", "text/*")) },
+                    onClick = hapticImport,
                     enabled = !state.isBusy,
                     modifier = Modifier.weight(1f)
                 ) {
@@ -124,7 +132,7 @@ fun BackupScreen(
             }
             Spacer(modifier = Modifier.height(12.dp))
             Button(
-                onClick = { openBackupFolder(context) },
+                onClick = hapticOpenFolder,
                 enabled = !state.isBusy,
                 modifier = Modifier.fillMaxWidth(0.5f)
             ) {

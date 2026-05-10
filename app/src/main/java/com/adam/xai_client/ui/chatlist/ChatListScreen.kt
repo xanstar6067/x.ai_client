@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.Chat
 import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
+import com.adam.xai_client.ui.haptics.UiHapticSignal
+import com.adam.xai_client.ui.haptics.rememberHapticClick
 import java.text.DateFormat
 import java.util.Date
 
@@ -67,6 +69,13 @@ fun ChatListScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var chatPendingDeletion by remember { mutableStateOf<Chat?>(null) }
     var chatPendingDuplication by remember { mutableStateOf<Chat?>(null) }
+    val hapticOpenImages = rememberHapticClick(onOpenImages)
+    val hapticOpenVideos = rememberHapticClick(onOpenVideos)
+    val hapticOpenModels = rememberHapticClick(onOpenModels)
+    val hapticOpenRoles = rememberHapticClick(onOpenRoles)
+    val hapticOpenBackups = rememberHapticClick(onOpenBackups)
+    val hapticOpenSettings = rememberHapticClick(onOpenSettings)
+    val hapticNewChat = rememberHapticClick(UiHapticSignal.Confirm, onNewChat)
     TransientSnackbar(
         message = state.error,
         snackbarHostState = snackbarHostState,
@@ -79,29 +88,29 @@ fun ChatListScreen(
             TopAppBar(
                 title = { Text("xAI Chat") },
                 actions = {
-                    IconButton(onClick = onOpenImages) {
+                    IconButton(onClick = hapticOpenImages) {
                         Icon(Icons.Default.Image, contentDescription = "Изображения")
                     }
-                    IconButton(onClick = onOpenVideos) {
+                    IconButton(onClick = hapticOpenVideos) {
                         Icon(Icons.Default.Movie, contentDescription = "Видео")
                     }
-                    IconButton(onClick = onOpenModels) {
+                    IconButton(onClick = hapticOpenModels) {
                         Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Модели")
                     }
-                    IconButton(onClick = onOpenRoles) {
+                    IconButton(onClick = hapticOpenRoles) {
                         Icon(Icons.Default.Psychology, contentDescription = "Роли")
                     }
-                    IconButton(onClick = onOpenBackups) {
+                    IconButton(onClick = hapticOpenBackups) {
                         Icon(Icons.Default.Backup, contentDescription = "Резервное копирование и восстановление")
                     }
-                    IconButton(onClick = onOpenSettings) {
+                    IconButton(onClick = hapticOpenSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Настройки")
                     }
                 }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onNewChat) {
+            FloatingActionButton(onClick = hapticNewChat) {
                 Icon(Icons.Default.Add, contentDescription = "Новый чат")
             }
         }
@@ -150,6 +159,11 @@ fun ChatListScreen(
     }
 
     chatPendingDeletion?.let { chat ->
+        val confirmDelete = rememberHapticClick(UiHapticSignal.Destructive) {
+            onDeleteChat(chat.id)
+            chatPendingDeletion = null
+        }
+        val cancelDelete = rememberHapticClick { chatPendingDeletion = null }
         AlertDialog(
             onDismissRequest = { chatPendingDeletion = null },
             title = { Text("Удалить чат?") },
@@ -158,16 +172,13 @@ fun ChatListScreen(
             },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        onDeleteChat(chat.id)
-                        chatPendingDeletion = null
-                    }
+                    onClick = confirmDelete
                 ) {
                     Text("Удалить")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { chatPendingDeletion = null }) {
+                TextButton(onClick = cancelDelete) {
                     Text("Отмена")
                 }
             }
@@ -175,22 +186,24 @@ fun ChatListScreen(
     }
 
     chatPendingDuplication?.let { chat ->
+        val confirmDuplicate = rememberHapticClick(UiHapticSignal.Confirm) {
+            onDuplicateChat(chat.id)
+            chatPendingDuplication = null
+        }
+        val cancelDuplicate = rememberHapticClick { chatPendingDuplication = null }
         AlertDialog(
             onDismissRequest = { chatPendingDuplication = null },
             title = { Text("Скопировать чат?") },
             text = { Text("Будет создана копия чата \"${chat.title}\" со всеми сообщениями и настройками.") },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        onDuplicateChat(chat.id)
-                        chatPendingDuplication = null
-                    }
+                    onClick = confirmDuplicate
                 ) {
                     Text("Скопировать")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { chatPendingDuplication = null }) {
+                TextButton(onClick = cancelDuplicate) {
                     Text("Отмена")
                 }
             }
@@ -206,9 +219,12 @@ private fun ChatCard(
     onDelete: () -> Unit
 ) {
     val dateFormat = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT) }
+    val hapticClick = rememberHapticClick(onClick)
+    val hapticDuplicate = rememberHapticClick(UiHapticSignal.Confirm, onDuplicate)
+    val hapticDelete = rememberHapticClick(UiHapticSignal.Destructive, onDelete)
 
     Card(
-        onClick = onClick,
+        onClick = hapticClick,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -232,10 +248,10 @@ private fun ChatCard(
                 )
             }
             Spacer(modifier = Modifier.padding(start = 8.dp))
-            IconButton(onClick = onDuplicate) {
+            IconButton(onClick = hapticDuplicate) {
                 Icon(Icons.Default.ContentCopy, contentDescription = "Скопировать чат")
             }
-            IconButton(onClick = onDelete) {
+            IconButton(onClick = hapticDelete) {
                 Icon(Icons.Default.Delete, contentDescription = "Удалить чат")
             }
         }

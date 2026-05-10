@@ -40,6 +40,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
+import com.adam.xai_client.ui.haptics.UiHapticSignal
+import com.adam.xai_client.ui.haptics.rememberHapticClick
+import com.adam.xai_client.ui.haptics.rememberHapticValueChange
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +51,7 @@ fun SettingsScreen(
     onApiKeyChange: (String) -> Unit,
     onBaseUrlChange: (String) -> Unit,
     onStreamingHapticsChange: (Boolean) -> Unit,
+    onUiHapticsChange: (Boolean) -> Unit,
     onSave: () -> Unit,
     onCheckConnection: () -> Unit,
     onBack: () -> Unit,
@@ -55,6 +59,12 @@ fun SettingsScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showKey by remember { mutableStateOf(false) }
+    val hapticBack = rememberHapticClick(onBack)
+    val hapticToggleKey = rememberHapticClick(UiHapticSignal.Toggle) { showKey = !showKey }
+    val hapticStreamingHapticsChange = rememberHapticValueChange(onStreamingHapticsChange)
+    val hapticUiHapticsChange = rememberHapticValueChange(onUiHapticsChange)
+    val hapticSave = rememberHapticClick(UiHapticSignal.Confirm, onSave)
+    val hapticCheckConnection = rememberHapticClick(onCheckConnection)
     TransientSnackbar(
         message = state.error ?: state.message,
         snackbarHostState = snackbarHostState,
@@ -67,7 +77,7 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text("Настройки API") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = hapticBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 }
@@ -92,7 +102,7 @@ fun SettingsScreen(
                 visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 trailingIcon = {
-                    IconButton(onClick = { showKey = !showKey }) {
+                    IconButton(onClick = hapticToggleKey) {
                         Icon(
                             imageVector = if (showKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                             contentDescription = if (showKey) "Скрыть ключ" else "Показать ключ"
@@ -125,7 +135,28 @@ fun SettingsScreen(
                 }
                 Switch(
                     checked = state.streamingHapticsEnabled,
-                    onCheckedChange = onStreamingHapticsChange
+                    onCheckedChange = hapticStreamingHapticsChange
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Тактильный отклик интерфейса",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        text = "Короткая вибрация при нажатиях, удалении, выборе пунктов меню и переключении настроек.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = state.uiHapticsEnabled,
+                    onCheckedChange = hapticUiHapticsChange
                 )
             }
             Row(
@@ -133,7 +164,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Button(
-                    onClick = onSave,
+                    onClick = hapticSave,
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)
                 ) {
@@ -141,7 +172,7 @@ fun SettingsScreen(
                     Text("Сохранить", modifier = Modifier.padding(start = 8.dp))
                 }
                 TextButton(
-                    onClick = onCheckConnection,
+                    onClick = hapticCheckConnection,
                     enabled = !state.isCheckingConnection,
                     modifier = Modifier.weight(1f)
                 ) {
