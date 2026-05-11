@@ -2,6 +2,8 @@
 
 Полноценный Android-клиент для работы с моделями Grok от xAI.
 
+[![Watch the demo](https://img.youtube.com/vi/c_jTSzIJyw0/maxresdefault.jpg)](https://youtube.com/shorts/c_jTSzIJyw0?feature=share)
+
 Приложение ориентировано на удобную работу с ИИ-моделями, поддержку мультимедийных возможностей API xAI и расширенное управление чатами.
 
 ## Возможности
