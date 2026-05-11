@@ -14,7 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
@@ -59,7 +58,6 @@ fun ChatListScreen(
     onDeleteChat: (Long) -> Unit,
     onDuplicateChat: (Long) -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenModels: () -> Unit,
     onOpenRoles: () -> Unit,
     onOpenImages: () -> Unit,
     onOpenVideos: () -> Unit,
@@ -71,7 +69,6 @@ fun ChatListScreen(
     var chatPendingDuplication by remember { mutableStateOf<Chat?>(null) }
     val hapticOpenImages = rememberHapticClick(onOpenImages)
     val hapticOpenVideos = rememberHapticClick(onOpenVideos)
-    val hapticOpenModels = rememberHapticClick(onOpenModels)
     val hapticOpenRoles = rememberHapticClick(onOpenRoles)
     val hapticOpenBackups = rememberHapticClick(onOpenBackups)
     val hapticOpenSettings = rememberHapticClick(onOpenSettings)
@@ -93,9 +90,6 @@ fun ChatListScreen(
                     }
                     IconButton(onClick = hapticOpenVideos) {
                         Icon(Icons.Default.Movie, contentDescription = "Видео")
-                    }
-                    IconButton(onClick = hapticOpenModels) {
-                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Модели")
                     }
                     IconButton(onClick = hapticOpenRoles) {
                         Icon(Icons.Default.Psychology, contentDescription = "Роли")

@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Visibility
@@ -54,6 +55,7 @@ fun SettingsScreen(
     onStreamingHapticsChange: (Boolean) -> Unit,
     onUiHapticsChange: (Boolean) -> Unit,
     onNamingModelSelected: (String) -> Unit,
+    onOpenModels: () -> Unit,
     onSave: () -> Unit,
     onCheckConnection: () -> Unit,
     onBack: () -> Unit,
@@ -65,6 +67,7 @@ fun SettingsScreen(
     val hapticToggleKey = rememberHapticClick(UiHapticSignal.Toggle) { showKey = !showKey }
     val hapticStreamingHapticsChange = rememberHapticValueChange(onStreamingHapticsChange)
     val hapticUiHapticsChange = rememberHapticValueChange(onUiHapticsChange)
+    val hapticOpenModels = rememberHapticClick(onOpenModels)
     val hapticSave = rememberHapticClick(UiHapticSignal.Confirm, onSave)
     val hapticCheckConnection = rememberHapticClick(onCheckConnection)
     TransientSnackbar(
@@ -94,6 +97,14 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            Button(
+                onClick = hapticOpenModels,
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
+                Text("Выберите модели", modifier = Modifier.padding(start = 8.dp))
+            }
             OutlinedTextField(
                 value = state.apiKey,
                 onValueChange = onApiKeyChange,
