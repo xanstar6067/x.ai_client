@@ -20,6 +20,8 @@ import com.adam.xai_client.domain.model.VideoGenerationOptions
 import com.adam.xai_client.domain.model.XaiModelLimits
 import com.adam.xai_client.domain.usecase.GenerateChatTitleUseCase
 import com.adam.xai_client.ui.components.toUserMessage
+import java.io.File
+import java.util.Base64
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -310,12 +312,10 @@ class VideoGenerationViewModel(
                     selectedModelId = modelId
                 )
                 val parentMessageId = videoRepository.getVisibleTailMessageId(chatId)
-                val attachedSourceImageUrl = state.sourceImageAttachment?.let { attachment ->
-                    withContext(Dispatchers.IO) {
-                        attachmentStorage.toDataUrl(attachment)
-                    } ?: throw IllegalStateException("Не удалось прочитать изображение.")
-                }
-                val sourceImageUrl = attachedSourceImageUrl ?: state.sourceImageUrl.trim().ifBlank { null }
+                
+                val sourceImageUrl = state.sourceImageAttachment?.filePath 
+                    ?: state.sourceImageUrl.trim().ifBlank { null }
+                
                 val userMessageId = videoRepository.addUserMessage(
                     chatId = chatId,
                     content = prompt,
@@ -611,6 +611,23 @@ class VideoGenerationViewModel(
         parentMessageId: Long,
         state: VideoGenerationUiState
     ) {
+        val apiSourceImageUrl = if (sourceImageUrl != null && sourceImageUrl.startsWith("/")) {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val file = File(sourceImageUrl)
+                    if (file.exists()) {
+                        val bytes = file.readBytes()
+                        val base64 = Base64.getEncoder().encodeToString(bytes)
+                        val ext = sourceImageUrl.substringAfterLast('.').lowercase()
+                        val mimeType = if (ext == "png") "image/png" else "image/jpeg"
+                        "data:$mimeType;base64,$base64"
+                    } else null
+                }.getOrNull()
+            }
+        } else {
+            sourceImageUrl
+        }
+
         val (video, requestId) = videoRepository.generateVideo(
             options = VideoGenerationOptions(
                 modelId = modelId,
@@ -618,7 +635,7 @@ class VideoGenerationViewModel(
                 durationSeconds = state.durationSeconds,
                 aspectRatio = state.aspectRatio,
                 resolution = state.resolution,
-                sourceImageUrl = sourceImageUrl
+                sourceImageUrl = apiSourceImageUrl
             ),
             onProgress = { progress ->
                 _uiState.update {

@@ -722,8 +722,13 @@ private fun VideoMessageCard(
                 )
             }
             message.sourceImageUrl?.takeIf { it.isNotBlank() }?.let { url ->
+                val displayUrl = if (url.startsWith("/")) {
+                    url.substringAfterLast('/')
+                } else {
+                    url
+                }
                 Text(
-                    text = "Исходная картинка: $url",
+                    text = "Исходная картинка: $displayUrl",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
