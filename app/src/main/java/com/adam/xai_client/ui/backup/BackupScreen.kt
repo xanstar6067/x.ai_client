@@ -6,7 +6,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +43,7 @@ import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
 import com.adam.xai_client.ui.haptics.UiHapticSignal
 import com.adam.xai_client.ui.haptics.rememberHapticClick
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +56,7 @@ fun BackupScreen(
 ) {
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
     val hapticBack = rememberHapticClick(onBack)
     val hapticExport = rememberHapticClick(UiHapticSignal.Confirm, onExport)
     val importLauncher = rememberLauncherForActivityResult(
@@ -65,7 +67,13 @@ fun BackupScreen(
     val hapticImport = rememberHapticClick(UiHapticSignal.Confirm) {
         importLauncher.launch(arrayOf("application/zip", "application/json", "text/*"))
     }
-    val hapticOpenFolder = rememberHapticClick { openBackupFolder(context) }
+    val hapticOpenFolder = rememberHapticClick {
+        openBackupFolder(context) {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar("Не удалось открыть проводник.")
+            }
+        }
+    }
 
     TransientSnackbar(
         message = state.error ?: state.message,
@@ -151,7 +159,7 @@ fun BackupScreen(
 private const val BACKUP_DIR = "xAI Chat Backups"
 private const val BACKUP_FOLDER_PATH = "Downloads/$BACKUP_DIR"
 
-private fun openBackupFolder(context: Context) {
+private fun openBackupFolder(context: Context, onOpenFailed: () -> Unit) {
     val folderUri: Uri = DocumentsContract.buildDocumentUri(
         "com.android.externalstorage.documents",
         "primary:${Environment.DIRECTORY_DOWNLOADS}/$BACKUP_DIR"
@@ -162,21 +170,21 @@ private fun openBackupFolder(context: Context) {
     try {
         context.startActivity(intent)
     } catch (_: ActivityNotFoundException) {
-        openBackupFolderPicker(context, folderUri)
+        openBackupFolderPicker(context, folderUri, onOpenFailed)
     } catch (_: SecurityException) {
-        openBackupFolderPicker(context, folderUri)
+        openBackupFolderPicker(context, folderUri, onOpenFailed)
     }
 }
 
-private fun openBackupFolderPicker(context: Context, initialUri: Uri) {
+private fun openBackupFolderPicker(context: Context, initialUri: Uri, onOpenFailed: () -> Unit) {
     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
         putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUri)
     }
     try {
         context.startActivity(intent)
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, "Не удалось открыть проводник.", Toast.LENGTH_SHORT).show()
+        onOpenFailed()
     } catch (_: SecurityException) {
-        Toast.makeText(context, "Не удалось открыть проводник.", Toast.LENGTH_SHORT).show()
+        onOpenFailed()
     }
 }
