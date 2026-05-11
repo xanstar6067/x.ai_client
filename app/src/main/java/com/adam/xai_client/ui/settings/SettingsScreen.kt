@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.adam.xai_client.ui.components.DropdownSelector
 import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
 import com.adam.xai_client.ui.haptics.UiHapticSignal
@@ -52,6 +53,7 @@ fun SettingsScreen(
     onBaseUrlChange: (String) -> Unit,
     onStreamingHapticsChange: (Boolean) -> Unit,
     onUiHapticsChange: (Boolean) -> Unit,
+    onNamingModelSelected: (String) -> Unit,
     onSave: () -> Unit,
     onCheckConnection: () -> Unit,
     onBack: () -> Unit,
@@ -119,6 +121,24 @@ fun SettingsScreen(
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = hapticSave,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = null)
+                    Text("Сохранить", modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+            Text(
+                text = "По умолчанию используется https://api.x.ai/v1",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -159,31 +179,41 @@ fun SettingsScreen(
                     onCheckedChange = hapticUiHapticsChange
                 )
             }
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Модель именования чатов",
+                    style = MaterialTheme.typography.titleSmall
+                )
+                DropdownSelector(
+                    label = "Выберите text-модель",
+                    options = state.availableNamingModels,
+                    selectedOption = state.availableNamingModels.firstOrNull {
+                        it.id == state.selectedNamingModelId
+                    },
+                    optionLabel = { model -> model.name.ifBlank { model.id } },
+                    onOptionSelected = { model -> onNamingModelSelected(model.id) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = "Используется после первого сообщения для короткого названия text, image и video чатов.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Button(
-                    onClick = hapticSave,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)
-                ) {
-                    Icon(Icons.Default.Check, contentDescription = null)
-                    Text("Сохранить", modifier = Modifier.padding(start = 8.dp))
-                }
                 TextButton(
                     onClick = hapticCheckConnection,
                     enabled = !state.isCheckingConnection,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (state.isCheckingConnection) "Проверка..." else "Проверить")
+                    Text(if (state.isCheckingConnection) "Проверка..." else "Проверить модель")
                 }
             }
-            Text(
-                text = "По умолчанию используется https://api.x.ai/v1",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

@@ -212,6 +212,17 @@ class ImageRepository(
         )
     }
 
+    suspend fun updateChatTitle(
+        chatId: Long,
+        title: String,
+        updatedAt: Long = System.currentTimeMillis()
+    ) {
+        val trimmedTitle = title.trim()
+        if (trimmedTitle.isBlank()) return
+        val current = imageChatDao.getChat(chatId) ?: return
+        imageChatDao.updateChat(current.copy(title = trimmedTitle, updatedAt = updatedAt))
+    }
+
     suspend fun addUserMessage(
         chatId: Long,
         content: String,

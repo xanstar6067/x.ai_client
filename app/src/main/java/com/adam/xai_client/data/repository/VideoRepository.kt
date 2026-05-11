@@ -200,6 +200,17 @@ class VideoRepository(
         )
     }
 
+    suspend fun updateChatTitle(
+        chatId: Long,
+        title: String,
+        updatedAt: Long = System.currentTimeMillis()
+    ) {
+        val trimmedTitle = title.trim()
+        if (trimmedTitle.isBlank()) return
+        val current = videoChatDao.getChat(chatId) ?: return
+        videoChatDao.updateChat(current.copy(title = trimmedTitle, updatedAt = updatedAt))
+    }
+
     suspend fun addUserMessage(
         chatId: Long,
         content: String,

@@ -38,6 +38,9 @@ class SettingsDataStore(private val context: Context) {
     val lastSelectedRoleId: Flow<Long?> = context.xaiSettingsDataStore.data
         .map { preferences -> preferences[LAST_SELECTED_ROLE_ID] }
 
+    val chatNamingModelId: Flow<String?> = context.xaiSettingsDataStore.data
+        .map { preferences -> preferences[CHAT_NAMING_MODEL_ID] }
+
     val streamingHapticsEnabled: Flow<Boolean> = context.xaiSettingsDataStore.data
         .map { preferences -> preferences[STREAMING_HAPTICS_ENABLED] ?: true }
 
@@ -71,6 +74,16 @@ class SettingsDataStore(private val context: Context) {
         }
     }
 
+    suspend fun setChatNamingModelId(modelId: String?) {
+        context.xaiSettingsDataStore.edit { preferences ->
+            if (modelId == null) {
+                preferences.remove(CHAT_NAMING_MODEL_ID)
+            } else {
+                preferences[CHAT_NAMING_MODEL_ID] = modelId
+            }
+        }
+    }
+
     suspend fun setStreamingHapticsEnabled(enabled: Boolean) {
         context.xaiSettingsDataStore.edit { preferences ->
             preferences[STREAMING_HAPTICS_ENABLED] = enabled
@@ -88,6 +101,7 @@ class SettingsDataStore(private val context: Context) {
         val BASE_URL = stringPreferencesKey("base_url")
         val LAST_SELECTED_MODEL_ID = stringPreferencesKey("last_selected_model_id")
         val LAST_SELECTED_ROLE_ID = longPreferencesKey("last_selected_role_id")
+        val CHAT_NAMING_MODEL_ID = stringPreferencesKey("chat_naming_model_id")
         val STREAMING_HAPTICS_ENABLED = booleanPreferencesKey("streaming_haptics_enabled")
         val UI_HAPTICS_ENABLED = booleanPreferencesKey("ui_haptics_enabled")
     }

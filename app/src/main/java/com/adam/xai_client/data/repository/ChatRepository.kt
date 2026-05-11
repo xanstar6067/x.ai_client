@@ -234,6 +234,17 @@ class ChatRepository(
         chatDao.updateChat(current.copy(updatedAt = updatedAt))
     }
 
+    suspend fun updateChatTitle(
+        chatId: Long,
+        title: String,
+        updatedAt: Long = System.currentTimeMillis()
+    ) {
+        val trimmedTitle = title.trim()
+        if (trimmedTitle.isBlank()) return
+        val current = chatDao.getChat(chatId) ?: return
+        chatDao.updateChat(current.copy(title = trimmedTitle, updatedAt = updatedAt))
+    }
+
     suspend fun deleteChat(chatId: Long) {
         chatDao.deleteChatById(chatId)
     }

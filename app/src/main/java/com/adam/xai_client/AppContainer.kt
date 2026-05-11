@@ -14,6 +14,7 @@ import com.adam.xai_client.data.repository.RoleRepository
 import com.adam.xai_client.data.repository.SettingsRepository
 import com.adam.xai_client.data.repository.VideoRepository
 import com.adam.xai_client.domain.token.TokenCounter
+import com.adam.xai_client.domain.usecase.GenerateChatTitleUseCase
 import com.adam.xai_client.domain.usecase.SendMessageUseCase
 
 class AppContainer(context: Context) {
@@ -74,10 +75,16 @@ class AppContainer(context: Context) {
         apiClient = apiClient
     )
 
+    val generateChatTitleUseCase: GenerateChatTitleUseCase = GenerateChatTitleUseCase(
+        settingsRepository = settingsRepository,
+        apiClient = apiClient
+    )
+
     val sendMessageUseCase: SendMessageUseCase = SendMessageUseCase(
         chatRepository = chatRepository,
         roleRepository = roleRepository,
         settingsRepository = settingsRepository,
-        apiClient = apiClient
+        apiClient = apiClient,
+        generateChatTitleUseCase = generateChatTitleUseCase
     )
 }

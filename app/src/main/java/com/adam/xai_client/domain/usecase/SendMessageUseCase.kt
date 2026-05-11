@@ -14,7 +14,8 @@ class SendMessageUseCase(
     private val chatRepository: ChatRepository,
     private val roleRepository: RoleRepository,
     private val settingsRepository: SettingsRepository,
-    private val apiClient: XaiApiClient
+    private val apiClient: XaiApiClient,
+    private val generateChatTitleUseCase: GenerateChatTitleUseCase
 ) {
     suspend operator fun invoke(
         chatId: Long?,
@@ -41,6 +42,7 @@ class SendMessageUseCase(
             ?: roleRepository.getDefaultRole()
         val effectiveRoleId = effectiveRole?.id
         val now = System.currentTimeMillis()
+        val isFirstUserMessage = chatId == null && addUserMessage
         val targetChatId = chatId ?: chatRepository.createChat(
             title = text.asChatTitle(),
             selectedModelId = modelId,
@@ -169,6 +171,11 @@ class SendMessageUseCase(
             tokenCount = responseTokenCount
         )
         chatRepository.touchChat(targetChatId)
+        if (isFirstUserMessage) {
+            runCatching { generateChatTitleUseCase(text) }
+                .getOrNull()
+                ?.let { title -> chatRepository.updateChatTitle(targetChatId, title) }
+        }
 
         return targetChatId
     }

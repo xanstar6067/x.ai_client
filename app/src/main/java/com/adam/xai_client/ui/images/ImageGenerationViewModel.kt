@@ -16,6 +16,7 @@ import com.adam.xai_client.domain.model.ImageGenerationOptions
 import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.ModelLimits
 import com.adam.xai_client.domain.model.XaiModelLimits
+import com.adam.xai_client.domain.usecase.GenerateChatTitleUseCase
 import com.adam.xai_client.ui.components.toUserMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -53,7 +54,8 @@ data class ImageGenerationUiState(
 )
 
 class ImageGenerationViewModel(
-    private val imageRepository: ImageRepository
+    private val imageRepository: ImageRepository,
+    private val generateChatTitleUseCase: GenerateChatTitleUseCase
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ImageGenerationUiState())
     val uiState: StateFlow<ImageGenerationUiState> = _uiState.asStateFlow()
@@ -284,6 +286,7 @@ class ImageGenerationViewModel(
 
             runCatching {
                 withTimeout(GENERATION_TIMEOUT_MS) {
+                    val isFirstUserMessage = state.selectedChatId == null
                     val chatId = state.selectedChatId ?: imageRepository.createChat(
                         title = prompt.toImageChatTitle(),
                         selectedModelId = modelId
@@ -319,6 +322,11 @@ class ImageGenerationViewModel(
                         title = prompt.toImageChatTitle(),
                         selectedModelId = modelId
                     )
+                    if (isFirstUserMessage) {
+                        runCatching { generateChatTitleUseCase(prompt) }
+                            .getOrNull()
+                            ?.let { title -> imageRepository.updateChatTitle(chatId, title) }
+                    }
                     chatId
                 }
             }.onSuccess { chatId ->
@@ -539,7 +547,10 @@ class ImageGenerationViewModel(
 
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                ImageGenerationViewModel(imageRepository = container.imageRepository)
+                ImageGenerationViewModel(
+                    imageRepository = container.imageRepository,
+                    generateChatTitleUseCase = container.generateChatTitleUseCase
+                )
             }
         }
     }

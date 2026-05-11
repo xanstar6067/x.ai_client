@@ -15,6 +15,7 @@ import com.adam.xai_client.domain.model.VideoChat
 import com.adam.xai_client.domain.model.VideoChatMessage
 import com.adam.xai_client.domain.model.VideoGenerationOptions
 import com.adam.xai_client.domain.model.XaiModelLimits
+import com.adam.xai_client.domain.usecase.GenerateChatTitleUseCase
 import com.adam.xai_client.ui.components.toUserMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -54,7 +55,8 @@ data class VideoGenerationUiState(
 )
 
 class VideoGenerationViewModel(
-    private val videoRepository: VideoRepository
+    private val videoRepository: VideoRepository,
+    private val generateChatTitleUseCase: GenerateChatTitleUseCase
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(VideoGenerationUiState())
     val uiState: StateFlow<VideoGenerationUiState> = _uiState.asStateFlow()
@@ -271,6 +273,7 @@ class VideoGenerationViewModel(
             }
 
             runCatching {
+                val isFirstUserMessage = state.selectedChatId == null
                 val chatId = state.selectedChatId ?: videoRepository.createChat(
                     title = prompt.toVideoChatTitle(),
                     selectedModelId = modelId
@@ -291,6 +294,11 @@ class VideoGenerationViewModel(
                     parentMessageId = userMessageId,
                     state = state
                 )
+                if (isFirstUserMessage) {
+                    runCatching { generateChatTitleUseCase(prompt) }
+                        .getOrNull()
+                        ?.let { title -> videoRepository.updateChatTitle(chatId, title) }
+                }
                 chatId
             }.onSuccess { chatId ->
                 _uiState.update {
@@ -605,7 +613,10 @@ class VideoGenerationViewModel(
     companion object {
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                VideoGenerationViewModel(videoRepository = container.videoRepository)
+                VideoGenerationViewModel(
+                    videoRepository = container.videoRepository,
+                    generateChatTitleUseCase = container.generateChatTitleUseCase
+                )
             }
         }
     }

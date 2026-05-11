@@ -7,18 +7,27 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.adam.xai_client.AppContainer
 import com.adam.xai_client.data.remote.api.XaiApiClient
+import com.adam.xai_client.data.remote.dto.ApiChatMessage
+import com.adam.xai_client.data.repository.ModelRepository
 import com.adam.xai_client.data.repository.SettingsRepository
 import com.adam.xai_client.domain.model.ApiSettings
+import com.adam.xai_client.domain.model.AiModel
+import com.adam.xai_client.domain.model.ChatModelSettings
+import com.adam.xai_client.domain.model.MessageRole
+import com.adam.xai_client.domain.model.isTextChatModel
 import com.adam.xai_client.ui.components.toUserMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val apiKey: String = "",
     val baseUrl: String = ApiSettings.DEFAULT_BASE_URL,
+    val availableNamingModels: List<AiModel> = emptyList(),
+    val selectedNamingModelId: String? = null,
     val streamingHapticsEnabled: Boolean = true,
     val uiHapticsEnabled: Boolean = true,
     val isCheckingConnection: Boolean = false,
@@ -28,6 +37,7 @@ data class SettingsUiState(
 
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
+    private val modelRepository: ModelRepository,
     private val apiClient: XaiApiClient
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -54,6 +64,35 @@ class SettingsViewModel(
                 _uiState.update { it.copy(uiHapticsEnabled = enabled) }
             }
         }
+        viewModelScope.launch {
+            modelRepository.enabledModels.collect { models ->
+                val namingModels = models
+                    .filter { it.isTextChatModel() }
+                    .sortedBy { it.name.lowercase() }
+                val selected = _uiState.value.selectedNamingModelId
+                    ?.takeIf { selectedId -> namingModels.any { it.id == selectedId } }
+                    ?: settingsRepository.chatNamingModelId.first()
+                        ?.takeIf { selectedId -> namingModels.any { it.id == selectedId } }
+                    ?: namingModels.firstOrNull()?.id
+                _uiState.update {
+                    it.copy(
+                        availableNamingModels = namingModels,
+                        selectedNamingModelId = selected
+                    )
+                }
+                if (selected != null && selected != settingsRepository.chatNamingModelId.first()) {
+                    settingsRepository.setChatNamingModelId(selected)
+                }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.chatNamingModelId.collect { modelId ->
+                val selected = modelId?.takeIf { id ->
+                    _uiState.value.availableNamingModels.any { it.id == id }
+                } ?: _uiState.value.availableNamingModels.firstOrNull()?.id
+                _uiState.update { it.copy(selectedNamingModelId = selected) }
+            }
+        }
     }
 
     fun onApiKeyChange(value: String) {
@@ -75,6 +114,13 @@ class SettingsViewModel(
         _uiState.update { it.copy(uiHapticsEnabled = enabled, error = null, message = null) }
         viewModelScope.launch {
             settingsRepository.setUiHapticsEnabled(enabled)
+        }
+    }
+
+    fun onNamingModelSelected(modelId: String) {
+        _uiState.update { it.copy(selectedNamingModelId = modelId, error = null, message = null) }
+        viewModelScope.launch {
+            settingsRepository.setChatNamingModelId(modelId)
         }
     }
 
@@ -101,15 +147,38 @@ class SettingsViewModel(
                 it.copy(isCheckingConnection = true, error = null, message = null)
             }
             runCatching {
-                apiClient.getModels(
-                    apiKey = state.apiKey,
-                    baseUrl = state.baseUrl.ifBlank { ApiSettings.DEFAULT_BASE_URL }
-                )
-            }.onSuccess { models ->
+                val baseUrl = state.baseUrl.ifBlank { ApiSettings.DEFAULT_BASE_URL }
+                val namingModelId = state.selectedNamingModelId?.trim().orEmpty()
+                if (namingModelId.isBlank()) {
+                    val models = apiClient.getModels(
+                        apiKey = state.apiKey,
+                        baseUrl = baseUrl
+                    )
+                    "Подключение работает. Моделей: ${models.size}."
+                } else {
+                    apiClient.sendChatRequest(
+                        apiKey = state.apiKey,
+                        baseUrl = baseUrl,
+                        modelId = namingModelId,
+                        messages = listOf(
+                            ApiChatMessage(
+                                role = MessageRole.SYSTEM.apiName,
+                                content = "Ответь одним словом: OK."
+                            ),
+                            ApiChatMessage(
+                                role = MessageRole.USER.apiName,
+                                content = "Проверка доступности модели."
+                            )
+                        ),
+                        modelSettings = ChatModelSettings(maxTokens = 4, temperature = 0.0)
+                    )
+                    "Модель \"$namingModelId\" доступна."
+                }
+            }.onSuccess { successMessage ->
                 _uiState.update {
                     it.copy(
                         isCheckingConnection = false,
-                        message = "Подключение работает. Моделей: ${models.size}.",
+                        message = successMessage,
                         error = null
                     )
                 }
@@ -134,6 +203,7 @@ class SettingsViewModel(
             initializer {
                 SettingsViewModel(
                     settingsRepository = container.settingsRepository,
+                    modelRepository = container.modelRepository,
                     apiClient = container.apiClient
                 )
             }
