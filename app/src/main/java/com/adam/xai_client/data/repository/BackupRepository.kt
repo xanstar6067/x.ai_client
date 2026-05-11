@@ -47,6 +47,9 @@ class BackupRepository(
     suspend fun exportBackup(): Uri {
         val export = database.withTransaction {
             val mediaEntries = mutableListOf<BackupMediaEntry>()
+            val messages = database.messageDao().getAllMessages().map { message ->
+                message.toBackup(mediaEntries)
+            }
             val imageMessages = database.imageMessageDao().getAllMessages().map { message ->
                 message.toBackup(mediaEntries)
             }
@@ -57,7 +60,7 @@ class BackupRepository(
                 backup = ChatBackupDto(
                     exportedAt = System.currentTimeMillis(),
                     chats = database.chatDao().getAllChats().map { it.toBackup() },
-                    messages = database.messageDao().getAllMessages().map { it.toBackup() },
+                    messages = messages,
                     chatModelSettings = database.chatModelSettingsDao().getAllSettings().map { it.toBackup() },
                     roles = database.modelRoleDao().getAllRoles().map { it.toBackup() },
                     imageChats = database.imageChatDao().getAllChats().map { it.toBackup() },
@@ -85,8 +88,15 @@ class BackupRepository(
         val existingVideoPaths = database.videoMessageDao().getAllMessages()
             .mapNotNull { it.videoFilePath }
             .toSet()
+        val existingAttachmentPaths = database.messageDao().getAllMessages()
+            .flatMap { it.attachments }
+            .map { it.filePath }
+            .toSet()
+
         val restoredImagePaths = mutableSetOf<String>()
         val restoredVideoPaths = mutableSetOf<String>()
+        val restoredAttachmentPaths = mutableSetOf<String>()
+
         database.withTransaction {
             database.messageDao().deleteAllMessages()
             database.imageMessageDao().deleteAllMessages()
@@ -103,7 +113,30 @@ class BackupRepository(
             database.chatDao().insertChats(backup.chats.map { it.toEntity() })
             database.imageChatDao().insertChats(backup.imageChats.map { it.toEntity() })
             database.chatModelSettingsDao().upsertSettings(backup.chatModelSettings.map { it.toEntity() })
-            database.messageDao().insertMessages(backup.messages.map { it.toEntity() })
+
+            database.messageDao().insertMessages(
+                backup.messages.map { messageDto ->
+                    val restoredAttachments = messageDto.attachments.map { attachmentDto ->
+                        val restoredPath = restoreAttachmentFile(
+                            archivePath = attachmentDto.archivePath,
+                            importedMedia = importedBackup.media,
+                            originalFilePath = attachmentDto.filePath,
+                            displayName = attachmentDto.displayName
+                        )
+                        com.adam.xai_client.domain.model.MessageAttachment(
+                            kind = attachmentDto.kind,
+                            displayName = attachmentDto.displayName,
+                            mimeType = attachmentDto.mimeType,
+                            filePath = restoredPath ?: attachmentDto.filePath,
+                            sizeBytes = attachmentDto.sizeBytes
+                        )
+                    }
+                    messageDto.toEntity(restoredAttachments).also { entity ->
+                        entity.attachments.forEach { restoredAttachmentPaths.add(it.filePath) }
+                    }
+                }
+            )
+
             database.imageMessageDao().insertMessages(
                 backup.imageMessages.map { message ->
                     val imageFilePath = restoreImageFile(
@@ -126,8 +159,25 @@ class BackupRepository(
                         videoBase64 = message.videoBase64,
                         mimeType = message.videoMimeType
                     ) ?: message.videoFilePath
-                    message.toEntity(videoFilePath).also { entity ->
+
+                    val restoredSourceImageUrl = if (message.sourceImageArchivePath != null) {
+                        restoreAttachmentFile(
+                            archivePath = message.sourceImageArchivePath,
+                            importedMedia = importedBackup.media,
+                            originalFilePath = message.sourceImageUrl ?: "",
+                            displayName = "source_image"
+                        )
+                    } else {
+                        null
+                    }
+
+                    message.toEntity(videoFilePath, restoredSourceImageUrl).also { entity ->
                         entity.videoFilePath?.let(restoredVideoPaths::add)
+                        entity.sourceImageUrl?.let { path ->
+                            if (path.startsWith("/") || path.contains(APP_ATTACHMENTS_DIR)) {
+                                restoredAttachmentPaths.add(path)
+                            }
+                        }
                     }
                 }
             )
@@ -138,6 +188,10 @@ class BackupRepository(
         existingVideoPaths
             .filterNot { it in restoredVideoPaths }
             .forEach { deleteAppFile(it, APP_VIDEOS_DIR) }
+        existingAttachmentPaths
+            .filterNot { it in restoredAttachmentPaths }
+            .forEach { deleteAppFile(it, APP_ATTACHMENTS_DIR) }
+
         importedBackup.cleanup()
         return BackupImportSummary(
             chatCount = backup.chats.size,
@@ -316,6 +370,23 @@ class BackupRepository(
         )
     }
 
+    private fun restoreAttachmentFile(
+        archivePath: String?,
+        importedMedia: Map<String, File>,
+        originalFilePath: String,
+        displayName: String
+    ): String? {
+        val sourceFile = archivePath?.let(importedMedia::get) ?: return null
+
+        return restoreMediaFile(
+            sourceFile = sourceFile,
+            bytes = null,
+            storageDirName = APP_ATTACHMENTS_DIR,
+            filePrefix = "restored_attachment",
+            extension = displayName.substringAfterLast('.', "bin")
+        )
+    }
+
     private fun restoreMediaFile(
         sourceFile: File?,
         bytes: ByteArray?,
@@ -357,6 +428,7 @@ class BackupRepository(
         const val IMPORT_TEMP_DIR = "backup_import"
         const val APP_IMAGES_DIR = "generated_images"
         const val APP_VIDEOS_DIR = "generated_videos"
+        const val APP_ATTACHMENTS_DIR = "chat_attachments"
     }
 }
 
@@ -396,7 +468,7 @@ data class BackupImportSummary(
 
 @Serializable
 private data class ChatBackupDto(
-    val schemaVersion: Int = 3,
+    val schemaVersion: Int = 4,
     val exportedAt: Long,
     val chats: List<BackupChatDto>,
     val messages: List<BackupMessageDto>,
@@ -406,6 +478,16 @@ private data class ChatBackupDto(
     val imageMessages: List<BackupImageMessageDto>,
     val videoChats: List<BackupVideoChatDto> = emptyList(),
     val videoMessages: List<BackupVideoMessageDto> = emptyList()
+)
+
+@Serializable
+private data class BackupAttachmentDto(
+    val kind: com.adam.xai_client.domain.model.MessageAttachmentKind,
+    val displayName: String,
+    val mimeType: String,
+    val filePath: String,
+    val sizeBytes: Long,
+    val archivePath: String? = null
 )
 
 @Serializable
@@ -424,7 +506,7 @@ private data class BackupMessageDto(
     val chatId: Long,
     val role: String,
     val content: String,
-    val attachments: List<MessageAttachment> = emptyList(),
+    val attachments: List<BackupAttachmentDto> = emptyList(),
     val reasoningContent: String?,
     val tokenCount: Int?,
     val parentMessageId: Long?,
@@ -506,7 +588,8 @@ private data class BackupVideoMessageDto(
     val resolution: String?,
     val parentMessageId: Long?,
     val activeChildMessageId: Long?,
-    val createdAt: Long
+    val createdAt: Long,
+    val sourceImageArchivePath: String? = null
 )
 
 private fun ChatEntity.toBackup(): BackupChatDto = BackupChatDto(
@@ -527,25 +610,50 @@ private fun BackupChatDto.toEntity(): ChatEntity = ChatEntity(
     selectedRoleId = selectedRoleId
 )
 
-private fun MessageEntity.toBackup(): BackupMessageDto = BackupMessageDto(
-    id = id,
-    chatId = chatId,
-    role = role.name,
-    content = content,
-    attachments = attachments,
-    reasoningContent = reasoningContent,
-    tokenCount = tokenCount,
-    parentMessageId = parentMessageId,
-    activeChildMessageId = activeChildMessageId,
-    createdAt = createdAt
-)
+private fun MessageEntity.toBackup(mediaEntries: MutableList<BackupMediaEntry>): BackupMessageDto {
+    val backupAttachments = attachments.mapIndexed { index, attachment ->
+        val file = File(attachment.filePath)
+        val archivePath = if (file.exists()) {
+            val extension = attachment.displayName.substringAfterLast('.', "")
+            "media/attachments/msg_${id}_att_${index}.$extension"
+        } else {
+            null
+        }
+        if (archivePath != null) {
+            mediaEntries += BackupMediaEntry(
+                archivePath = archivePath,
+                sourceFile = file
+            )
+        }
+        BackupAttachmentDto(
+            kind = attachment.kind,
+            displayName = attachment.displayName,
+            mimeType = attachment.mimeType,
+            filePath = attachment.filePath,
+            sizeBytes = attachment.sizeBytes,
+            archivePath = archivePath
+        )
+    }
+    return BackupMessageDto(
+        id = id,
+        chatId = chatId,
+        role = role.name,
+        content = content,
+        attachments = backupAttachments,
+        reasoningContent = reasoningContent,
+        tokenCount = tokenCount,
+        parentMessageId = parentMessageId,
+        activeChildMessageId = activeChildMessageId,
+        createdAt = createdAt
+    )
+}
 
-private fun BackupMessageDto.toEntity(): MessageEntity = MessageEntity(
+private fun BackupMessageDto.toEntity(restoredAttachments: List<com.adam.xai_client.domain.model.MessageAttachment>): MessageEntity = MessageEntity(
     id = id,
     chatId = chatId,
     role = runCatching { MessageRole.valueOf(role) }.getOrDefault(MessageRole.USER),
     content = content,
-    attachments = attachments,
+    attachments = restoredAttachments,
     reasoningContent = reasoningContent,
     tokenCount = tokenCount,
     parentMessageId = parentMessageId,
@@ -666,16 +774,28 @@ private fun BackupVideoChatDto.toEntity(): VideoChatEntity = VideoChatEntity(
 )
 
 private fun VideoMessageEntity.toBackup(mediaEntries: MutableList<BackupMediaEntry>): BackupVideoMessageDto {
-    val sourceFile = videoFilePath?.let(::File)?.takeIf { it.exists() }
-    val archivePath = sourceFile?.let {
+    val videoSourceFile = videoFilePath?.let(::File)?.takeIf { it.exists() }
+    val videoArchivePath = videoSourceFile?.let {
         "media/videos/video_message_${id}.${videoMimeType.toVideoExtension()}"
     }
-    if (archivePath != null) {
+    if (videoArchivePath != null) {
         mediaEntries += BackupMediaEntry(
-            archivePath = archivePath,
-            sourceFile = sourceFile
+            archivePath = videoArchivePath,
+            sourceFile = videoSourceFile
         )
     }
+
+    val sourceImageFile = sourceImageUrl?.let(::File)?.takeIf { it.exists() }
+    val sourceImageArchivePath = sourceImageFile?.let {
+        "media/videos/video_source_${id}.${it.extension}"
+    }
+    if (sourceImageArchivePath != null) {
+        mediaEntries += BackupMediaEntry(
+            archivePath = sourceImageArchivePath,
+            sourceFile = sourceImageFile
+        )
+    }
+
     return BackupVideoMessageDto(
         id = id,
         chatId = chatId,
@@ -683,7 +803,7 @@ private fun VideoMessageEntity.toBackup(mediaEntries: MutableList<BackupMediaEnt
         content = content,
         sourceImageUrl = sourceImageUrl,
         videoBase64 = null,
-        videoArchivePath = archivePath,
+        videoArchivePath = videoArchivePath,
         videoFilePath = videoFilePath,
         videoMimeType = videoMimeType,
         videoDurationSeconds = videoDurationSeconds,
@@ -693,16 +813,20 @@ private fun VideoMessageEntity.toBackup(mediaEntries: MutableList<BackupMediaEnt
         resolution = resolution,
         parentMessageId = parentMessageId,
         activeChildMessageId = activeChildMessageId,
-        createdAt = createdAt
+        createdAt = createdAt,
+        sourceImageArchivePath = sourceImageArchivePath
     )
 }
 
-private fun BackupVideoMessageDto.toEntity(restoredVideoFilePath: String?): VideoMessageEntity = VideoMessageEntity(
+private fun BackupVideoMessageDto.toEntity(
+    restoredVideoFilePath: String?,
+    restoredSourceImageUrl: String?
+): VideoMessageEntity = VideoMessageEntity(
     id = id,
     chatId = chatId,
     role = runCatching { MessageRole.valueOf(role) }.getOrDefault(MessageRole.USER),
     content = content,
-    sourceImageUrl = sourceImageUrl,
+    sourceImageUrl = restoredSourceImageUrl ?: sourceImageUrl,
     videoFilePath = restoredVideoFilePath,
     videoMimeType = videoMimeType,
     videoDurationSeconds = videoDurationSeconds,
