@@ -195,6 +195,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 state = state,
                 onPromptChange = viewModel::onPromptChange,
                 onSourceImageUrlChange = viewModel::onSourceImageUrlChange,
+                onSourceImageFileSelected = viewModel::onSourceImageFileSelected,
                 onAspectRatioChange = viewModel::onAspectRatioChange,
                 onResolutionChange = viewModel::onResolutionChange,
                 onModelSelected = viewModel::onModelSelected,

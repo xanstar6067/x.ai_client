@@ -7,12 +7,14 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.adam.xai_client.AppContainer
+import com.adam.xai_client.data.repository.ChatAttachmentStorage
 import com.adam.xai_client.data.repository.ImageRepository
 import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.GeneratedImage
 import com.adam.xai_client.domain.model.ImageChat
 import com.adam.xai_client.domain.model.ImageChatMessage
 import com.adam.xai_client.domain.model.ImageGenerationOptions
+import com.adam.xai_client.domain.model.MessageAttachmentKind
 import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.ModelLimits
 import com.adam.xai_client.domain.model.XaiModelLimits
@@ -54,6 +56,7 @@ data class ImageGenerationUiState(
 )
 
 class ImageGenerationViewModel(
+    private val attachmentStorage: ChatAttachmentStorage,
     private val imageRepository: ImageRepository,
     private val generateChatTitleUseCase: GenerateChatTitleUseCase
 ) : ViewModel() {
@@ -109,6 +112,26 @@ class ImageGenerationViewModel(
 
     fun onSourceImageUrlChange(value: String) {
         _uiState.update { it.copy(sourceImageUrl = value, error = null, message = null) }
+    }
+
+    fun onSourceImageFileSelected(uri: Uri) {
+        viewModelScope.launch {
+            runCatching {
+                val attachment = attachmentStorage.copyAttachment(uri, MessageAttachmentKind.IMAGE)
+                attachmentStorage.toDataUrl(attachment)
+                    ?: throw IllegalStateException("Не удалось прочитать изображение.")
+            }.onSuccess { dataUrl ->
+                _uiState.update {
+                    it.copy(
+                        sourceImageUrl = dataUrl,
+                        error = null,
+                        message = "Изображение прикреплено как исходное."
+                    )
+                }
+            }.onFailure { throwable ->
+                _uiState.update { it.copy(error = throwable.toUserMessage()) }
+            }
+        }
     }
 
     fun onAspectRatioChange(value: String) {
@@ -548,6 +571,7 @@ class ImageGenerationViewModel(
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 ImageGenerationViewModel(
+                    attachmentStorage = container.chatAttachmentStorage,
                     imageRepository = container.imageRepository,
                     generateChatTitleUseCase = container.generateChatTitleUseCase
                 )

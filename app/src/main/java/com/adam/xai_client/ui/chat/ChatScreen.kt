@@ -419,7 +419,7 @@ private fun ChatInput(
                 value = inputText,
                 onValueChange = onInputChange,
                 modifier = Modifier.weight(1f),
-                label = { Text("РЎРѕРѕР±С‰РµРЅРёРµ") },
+                label = { Text("Сообщение") },
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Sentences,
                     imeAction = ImeAction.Default

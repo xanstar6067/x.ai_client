@@ -37,7 +37,6 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
@@ -615,7 +614,7 @@ private fun VideoPromptBar(
                     onClick = onPickSourceImage,
                     enabled = !state.isGenerating
                 ) {
-                    Icon(Icons.Filled.Image, contentDescription = "Прикрепить изображение")
+                    Icon(Icons.Filled.Add, contentDescription = "Прикрепить изображение")
                 }
             },
             modifier = Modifier.fillMaxWidth()

@@ -3,6 +3,7 @@ package com.adam.xai_client.ui.images
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -100,6 +101,7 @@ fun ImageGenerationScreen(
     state: ImageGenerationUiState,
     onPromptChange: (String) -> Unit,
     onSourceImageUrlChange: (String) -> Unit,
+    onSourceImageFileSelected: (Uri) -> Unit,
     onAspectRatioChange: (String) -> Unit,
     onResolutionChange: (String) -> Unit,
     onModelSelected: (String) -> Unit,
@@ -145,6 +147,11 @@ fun ImageGenerationScreen(
             onStoragePermissionDenied()
         }
         pendingSaveMessageId = 0L
+    }
+    val sourceImagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let(onSourceImageFileSelected)
     }
 
     TransientSnackbar(
@@ -211,6 +218,7 @@ fun ImageGenerationScreen(
                 padding = padding,
                 onPromptChange = onPromptChange,
                 onSourceImageUrlChange = onSourceImageUrlChange,
+                onPickSourceImage = { sourceImagePicker.launch(arrayOf("image/jpeg", "image/png")) },
                 onModelSelected = onModelSelected,
                 onImageSettingsOpenChange = onImageSettingsOpenChange,
                 onEditFromMessage = onEditFromMessage,
@@ -410,6 +418,7 @@ private fun ImageChatContent(
     padding: PaddingValues,
     onPromptChange: (String) -> Unit,
     onSourceImageUrlChange: (String) -> Unit,
+    onPickSourceImage: () -> Unit,
     onModelSelected: (String) -> Unit,
     onImageSettingsOpenChange: (Boolean) -> Unit,
     onEditFromMessage: (Long) -> Unit,
@@ -484,6 +493,7 @@ private fun ImageChatContent(
             state = state,
             onPromptChange = onPromptChange,
             onSourceImageUrlChange = onSourceImageUrlChange,
+            onPickSourceImage = onPickSourceImage,
             onClearEditSource = onClearEditSource,
             onGenerate = onGenerate,
             onStopGeneration = onStopGeneration
@@ -562,6 +572,7 @@ private fun ImagePromptBar(
     state: ImageGenerationUiState,
     onPromptChange: (String) -> Unit,
     onSourceImageUrlChange: (String) -> Unit,
+    onPickSourceImage: () -> Unit,
     onClearEditSource: () -> Unit,
     onGenerate: () -> Unit,
     onStopGeneration: () -> Unit
@@ -604,6 +615,14 @@ private fun ImagePromptBar(
                 capitalization = KeyboardCapitalization.None,
                 imeAction = ImeAction.Next
             ),
+            trailingIcon = {
+                IconButton(
+                    onClick = onPickSourceImage,
+                    enabled = state.editingMessageId == null && !state.isGenerating
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "Прикрепить изображение")
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         )
         Row(
