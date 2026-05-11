@@ -10,6 +10,7 @@ import com.adam.xai_client.AppContainer
 import com.adam.xai_client.data.repository.ChatAttachmentStorage
 import com.adam.xai_client.data.repository.VideoRepository
 import com.adam.xai_client.domain.model.AiModel
+import com.adam.xai_client.domain.model.MessageAttachment
 import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.MessageAttachmentKind
 import com.adam.xai_client.domain.model.ModelLimits
@@ -20,6 +21,7 @@ import com.adam.xai_client.domain.model.XaiModelLimits
 import com.adam.xai_client.domain.usecase.GenerateChatTitleUseCase
 import com.adam.xai_client.ui.components.toUserMessage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,10 +32,12 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class VideoGenerationUiState(
     val prompt: String = "",
     val sourceImageUrl: String = "",
+    val sourceImageAttachment: MessageAttachment? = null,
     val durationSeconds: Int = 5,
     val aspectRatio: String = "16:9",
     val resolution: String = "480p",
@@ -109,19 +113,19 @@ class VideoGenerationViewModel(
     }
 
     fun onSourceImageUrlChange(value: String) {
-        _uiState.update { it.copy(sourceImageUrl = value, error = null, message = null) }
+        _uiState.update { it.copy(sourceImageUrl = value, sourceImageAttachment = null, error = null, message = null) }
     }
 
     fun onSourceImageFileSelected(uri: Uri) {
         viewModelScope.launch {
             runCatching {
                 val attachment = attachmentStorage.copyAttachment(uri, MessageAttachmentKind.IMAGE)
-                attachmentStorage.toDataUrl(attachment)
-                    ?: throw IllegalStateException("Не удалось прочитать изображение.")
-            }.onSuccess { dataUrl ->
+                attachment
+            }.onSuccess { attachment ->
                 _uiState.update {
                     it.copy(
-                        sourceImageUrl = dataUrl,
+                        sourceImageUrl = attachment.displayName,
+                        sourceImageAttachment = attachment,
                         error = null,
                         message = "Изображение прикреплено как стартовый кадр."
                     )
@@ -176,6 +180,7 @@ class VideoGenerationViewModel(
                 selectedModelId = selectedModelId,
                 selectedModelLimits = limitsForModelId(selectedModelId, it.videoModels),
                 sourceImageUrl = "",
+                sourceImageAttachment = null,
                 error = null,
                 message = null
             )
@@ -190,6 +195,7 @@ class VideoGenerationViewModel(
                 messages = emptyList(),
                 prompt = "",
                 sourceImageUrl = "",
+                sourceImageAttachment = null,
                 error = null,
                 message = null
             )
@@ -204,6 +210,7 @@ class VideoGenerationViewModel(
                 messages = emptyList(),
                 prompt = "",
                 sourceImageUrl = "",
+                sourceImageAttachment = null,
                 isVideoSettingsOpen = false,
                 isModelInfoOpen = false,
                 error = null,
@@ -223,6 +230,7 @@ class VideoGenerationViewModel(
                                 isNewChatMode = false,
                                 messages = emptyList(),
                                 sourceImageUrl = "",
+                                sourceImageAttachment = null,
                                 error = null,
                                 message = null
                             )
@@ -302,7 +310,12 @@ class VideoGenerationViewModel(
                     selectedModelId = modelId
                 )
                 val parentMessageId = videoRepository.getVisibleTailMessageId(chatId)
-                val sourceImageUrl = state.sourceImageUrl.trim().ifBlank { null }
+                val attachedSourceImageUrl = state.sourceImageAttachment?.let { attachment ->
+                    withContext(Dispatchers.IO) {
+                        attachmentStorage.toDataUrl(attachment)
+                    } ?: throw IllegalStateException("Не удалось прочитать изображение.")
+                }
+                val sourceImageUrl = attachedSourceImageUrl ?: state.sourceImageUrl.trim().ifBlank { null }
                 val userMessageId = videoRepository.addUserMessage(
                     chatId = chatId,
                     content = prompt,
@@ -330,6 +343,7 @@ class VideoGenerationViewModel(
                         isNewChatMode = false,
                         prompt = "",
                         sourceImageUrl = "",
+                        sourceImageAttachment = null,
                         isGenerating = false,
                         generationProgress = null,
                         generationStatus = null,

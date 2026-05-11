@@ -14,6 +14,7 @@ import com.adam.xai_client.domain.model.GeneratedImage
 import com.adam.xai_client.domain.model.ImageChat
 import com.adam.xai_client.domain.model.ImageChatMessage
 import com.adam.xai_client.domain.model.ImageGenerationOptions
+import com.adam.xai_client.domain.model.MessageAttachment
 import com.adam.xai_client.domain.model.MessageAttachmentKind
 import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.ModelLimits
@@ -21,6 +22,7 @@ import com.adam.xai_client.domain.model.XaiModelLimits
 import com.adam.xai_client.domain.usecase.GenerateChatTitleUseCase
 import com.adam.xai_client.ui.components.toUserMessage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,11 +33,13 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 data class ImageGenerationUiState(
     val prompt: String = "",
     val sourceImageUrl: String = "",
+    val sourceImageAttachment: MessageAttachment? = null,
     val aspectRatio: String = "auto",
     val resolution: String = "1k",
     val chats: List<ImageChat> = emptyList(),
@@ -111,19 +115,19 @@ class ImageGenerationViewModel(
     }
 
     fun onSourceImageUrlChange(value: String) {
-        _uiState.update { it.copy(sourceImageUrl = value, error = null, message = null) }
+        _uiState.update { it.copy(sourceImageUrl = value, sourceImageAttachment = null, error = null, message = null) }
     }
 
     fun onSourceImageFileSelected(uri: Uri) {
         viewModelScope.launch {
             runCatching {
                 val attachment = attachmentStorage.copyAttachment(uri, MessageAttachmentKind.IMAGE)
-                attachmentStorage.toDataUrl(attachment)
-                    ?: throw IllegalStateException("Не удалось прочитать изображение.")
-            }.onSuccess { dataUrl ->
+                attachment
+            }.onSuccess { attachment ->
                 _uiState.update {
                     it.copy(
-                        sourceImageUrl = dataUrl,
+                        sourceImageUrl = attachment.displayName,
+                        sourceImageAttachment = attachment,
                         error = null,
                         message = "Изображение прикреплено как исходное."
                     )
@@ -174,6 +178,7 @@ class ImageGenerationViewModel(
                 selectedModelLimits = limitsForModelId(chatModelId ?: it.selectedModelId, it.imageModels),
                 editingMessageId = null,
                 sourceImageUrl = "",
+                sourceImageAttachment = null,
                 error = null,
                 message = null
             )
@@ -188,6 +193,7 @@ class ImageGenerationViewModel(
                 messages = emptyList(),
                 prompt = "",
                 sourceImageUrl = "",
+                sourceImageAttachment = null,
                 editingMessageId = null,
                 error = null,
                 message = null
@@ -203,6 +209,7 @@ class ImageGenerationViewModel(
                 messages = emptyList(),
                 prompt = "",
                 sourceImageUrl = "",
+                sourceImageAttachment = null,
                 editingMessageId = null,
                 isImageSettingsOpen = false,
                 error = null,
@@ -223,6 +230,7 @@ class ImageGenerationViewModel(
                                 messages = emptyList(),
                                 editingMessageId = null,
                                 sourceImageUrl = "",
+                                sourceImageAttachment = null,
                                 error = null,
                                 message = null
                             )
@@ -252,7 +260,7 @@ class ImageGenerationViewModel(
             runCatching {
                 imageRepository.deleteMessage(messageId)
                 if (_uiState.value.editingMessageId == messageId) {
-                    _uiState.update { it.copy(editingMessageId = null, sourceImageUrl = "") }
+                    _uiState.update { it.copy(editingMessageId = null, sourceImageUrl = "", sourceImageAttachment = null) }
                 }
             }.onFailure { throwable ->
                 _uiState.update { it.copy(error = throwable.toUserMessage()) }
@@ -276,6 +284,7 @@ class ImageGenerationViewModel(
             it.copy(
                 editingMessageId = messageId,
                 sourceImageUrl = "",
+                sourceImageAttachment = null,
                 error = null,
                 message = "Следующий запрос будет редактировать выбранную картинку."
             )
@@ -319,6 +328,11 @@ class ImageGenerationViewModel(
                         state.messages.firstOrNull { it.id == messageId }?.generatedImage
                             ?.let { imageRepository.imageAsDataUrl(it) }
                     }
+                    val attachedSourceImageUrl = state.sourceImageAttachment?.let { attachment ->
+                        withContext(Dispatchers.IO) {
+                            attachmentStorage.toDataUrl(attachment)
+                        } ?: throw IllegalStateException("Не удалось прочитать изображение.")
+                    }
                     val userMessageId = imageRepository.addUserMessage(
                         chatId = chatId,
                         content = prompt,
@@ -330,7 +344,9 @@ class ImageGenerationViewModel(
                             prompt = prompt,
                             aspectRatio = state.aspectRatio.takeUnless { it == "auto" },
                             resolution = state.resolution,
-                            sourceImageUrl = sourceDataUrl ?: state.sourceImageUrl.trim().ifBlank { null }
+                            sourceImageUrl = sourceDataUrl
+                                ?: attachedSourceImageUrl
+                                ?: state.sourceImageUrl.trim().ifBlank { null }
                         )
                     )
                     imageRepository.addAssistantImageMessage(
@@ -359,6 +375,7 @@ class ImageGenerationViewModel(
                         isNewChatMode = false,
                         prompt = "",
                         sourceImageUrl = "",
+                        sourceImageAttachment = null,
                         editingMessageId = null,
                         isGenerating = false,
                         message = null,
