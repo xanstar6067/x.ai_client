@@ -4,11 +4,17 @@ import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.data.remote.api.TokenUsage
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 @Serializable
 data class ChatCompletionRequestDto(
     val model: String,
-    val messages: List<ApiChatMessage>,
+    val messages: List<ApiRequestMessageDto>,
     val stream: Boolean = false,
     @SerialName("max_tokens")
     val maxTokens: Int? = null,
@@ -30,7 +36,7 @@ data class ChatCompletionRequestDto(
 @Serializable
 data class ResponsesRequestDto(
     val model: String,
-    val input: List<ApiChatMessage>,
+    val input: List<ApiRequestMessageDto>,
     val stream: Boolean = false,
     @SerialName("max_output_tokens")
     val maxOutputTokens: Int? = null,
@@ -66,6 +72,12 @@ data class StreamOptionsDto(
     val includeUsage: Boolean
 )
 
+@Serializable
+data class ApiRequestMessageDto(
+    val role: String,
+    val content: JsonElement
+)
+
 fun chatCompletionRequestDto(
     model: String,
     messages: List<ApiChatMessage>,
@@ -73,7 +85,7 @@ fun chatCompletionRequestDto(
     settings: ChatModelSettings
 ): ChatCompletionRequestDto = ChatCompletionRequestDto(
     model = model,
-    messages = messages,
+    messages = messages.map { it.toChatCompletionsMessage() },
     stream = stream,
     maxTokens = settings.maxTokens,
     temperature = settings.temperature,
@@ -92,7 +104,7 @@ fun responsesRequestDto(
     settings: ChatModelSettings
 ): ResponsesRequestDto = ResponsesRequestDto(
     model = model,
-    input = messages,
+    input = messages.map { it.toResponsesMessage() },
     stream = stream,
     maxOutputTokens = settings.maxTokens,
     temperature = settings.temperature,
@@ -101,6 +113,75 @@ fun responsesRequestDto(
     tools = listOf(ResponsesToolDto(type = "web_search")).takeIf { settings.webSearchEnabled },
     streamOptions = StreamOptionsDto(includeUsage = true).takeIf { stream }
 )
+
+private fun ApiChatMessage.toChatCompletionsMessage(): ApiRequestMessageDto {
+    val imageAttachments = attachments.filter { it.kind == ApiMessageAttachmentKind.IMAGE }
+    if (imageAttachments.isEmpty()) {
+        return ApiRequestMessageDto(role = role, content = JsonPrimitive(content))
+    }
+    val blocks = buildList {
+        imageAttachments.mapNotNull { it.dataUrl }.forEach { dataUrl ->
+            add(
+                buildJsonObject {
+                    put("type", "image_url")
+                    put(
+                        "image_url",
+                        buildJsonObject {
+                            put("url", dataUrl)
+                            put("detail", "auto")
+                        }
+                    )
+                }
+            )
+        }
+        if (content.isNotBlank()) {
+            add(
+                buildJsonObject {
+                    put("type", "text")
+                    put("text", content)
+                }
+            )
+        }
+    }
+    return ApiRequestMessageDto(role = role, content = JsonArray(blocks))
+}
+
+private fun ApiChatMessage.toResponsesMessage(): ApiRequestMessageDto {
+    if (attachments.isEmpty()) {
+        return ApiRequestMessageDto(role = role, content = JsonPrimitive(content))
+    }
+    val blocks = buildList {
+        if (content.isNotBlank()) {
+            add(
+                buildJsonObject {
+                    put("type", "input_text")
+                    put("text", content)
+                }
+            )
+        }
+        attachments.forEach { attachment ->
+            when (attachment.kind) {
+                ApiMessageAttachmentKind.IMAGE -> attachment.dataUrl?.let { dataUrl ->
+                    add(
+                        buildJsonObject {
+                            put("type", "input_image")
+                            put("image_url", dataUrl)
+                        }
+                    )
+                }
+                ApiMessageAttachmentKind.DOCUMENT -> attachment.fileId?.let { fileId ->
+                    add(
+                        buildJsonObject {
+                            put("type", "input_file")
+                            put("file_id", fileId)
+                        }
+                    )
+                }
+            }
+        }
+    }
+    return ApiRequestMessageDto(role = role, content = JsonArray(blocks))
+}
 
 @Serializable
 data class ChatCompletionResponseDto(
@@ -211,6 +292,13 @@ data class ResponsesStreamEventDto(
     val response: ResponsesResponseDto? = null
 )
 
+@Serializable
+data class UploadedFileDto(
+    val id: String,
+    val filename: String,
+    val bytes: Long = 0
+)
+
 fun CompletionUsageDto.asDomain(): TokenUsage = TokenUsage(
     promptTokens = promptTokens ?: 0,
     completionTokens = completionTokens ?: 0,
@@ -283,8 +371,21 @@ data class VideoGenerationRequestDto(
 )
 
 @Serializable
+data class VideoEditRequestDto(
+    val model: String,
+    val prompt: String,
+    val video: VideoReferenceDto,
+    val duration: Int? = null,
+    @SerialName("aspect_ratio")
+    val aspectRatio: String? = null,
+    val resolution: String? = null
+)
+
+@Serializable
 data class VideoReferenceDto(
-    val url: String
+    val url: String? = null,
+    @SerialName("file_id")
+    val fileId: String? = null
 )
 
 @Serializable

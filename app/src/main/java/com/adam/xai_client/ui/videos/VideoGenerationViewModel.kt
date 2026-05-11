@@ -7,9 +7,11 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.adam.xai_client.AppContainer
+import com.adam.xai_client.data.repository.ChatAttachmentStorage
 import com.adam.xai_client.data.repository.VideoRepository
 import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.MessageRole
+import com.adam.xai_client.domain.model.MessageAttachmentKind
 import com.adam.xai_client.domain.model.ModelLimits
 import com.adam.xai_client.domain.model.VideoChat
 import com.adam.xai_client.domain.model.VideoChatMessage
@@ -55,6 +57,7 @@ data class VideoGenerationUiState(
 )
 
 class VideoGenerationViewModel(
+    private val attachmentStorage: ChatAttachmentStorage,
     private val videoRepository: VideoRepository,
     private val generateChatTitleUseCase: GenerateChatTitleUseCase
 ) : ViewModel() {
@@ -107,6 +110,26 @@ class VideoGenerationViewModel(
 
     fun onSourceImageUrlChange(value: String) {
         _uiState.update { it.copy(sourceImageUrl = value, error = null, message = null) }
+    }
+
+    fun onSourceImageFileSelected(uri: Uri) {
+        viewModelScope.launch {
+            runCatching {
+                val attachment = attachmentStorage.copyAttachment(uri, MessageAttachmentKind.IMAGE)
+                attachmentStorage.toDataUrl(attachment)
+                    ?: throw IllegalStateException("Не удалось прочитать изображение.")
+            }.onSuccess { dataUrl ->
+                _uiState.update {
+                    it.copy(
+                        sourceImageUrl = dataUrl,
+                        error = null,
+                        message = "Изображение прикреплено как стартовый кадр."
+                    )
+                }
+            }.onFailure { throwable ->
+                _uiState.update { it.copy(error = throwable.toUserMessage()) }
+            }
+        }
     }
 
     fun onDurationChange(value: Int) {
@@ -614,6 +637,7 @@ class VideoGenerationViewModel(
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 VideoGenerationViewModel(
+                    attachmentStorage = container.chatAttachmentStorage,
                     videoRepository = container.videoRepository,
                     generateChatTitleUseCase = container.generateChatTitleUseCase
                 )

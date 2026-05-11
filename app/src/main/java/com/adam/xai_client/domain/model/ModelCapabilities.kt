@@ -20,3 +20,18 @@ fun AiModel.isVideoGenerationModel(): Boolean {
 fun AiModel.isTextChatModel(): Boolean {
     return !isImageGenerationModel() && !isVideoGenerationModel()
 }
+
+fun AiModel.supportsImageInput(): Boolean {
+    return inputModalities.any { it.equals("image", ignoreCase = true) }
+}
+
+fun AiModel.supportsFileAttachments(): Boolean {
+    val normalizedId = id.lowercase()
+    val normalizedName = name.lowercase()
+    return isTextChatModel() &&
+        (
+            normalizedId.startsWith("grok-4") ||
+                normalizedName.startsWith("grok-4") ||
+                aliases.any { it.lowercase().startsWith("grok-4") }
+            )
+}

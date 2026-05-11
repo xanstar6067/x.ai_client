@@ -13,7 +13,10 @@ data class VideoGenerationOptions(
     val durationSeconds: Int = 5,
     val aspectRatio: String = "16:9",
     val resolution: String = "480p",
-    val sourceImageUrl: String? = null
+    val sourceImageUrl: String? = null,
+    val sourceVideoFilePath: String? = null,
+    val sourceVideoFileName: String? = null,
+    val sourceVideoMimeType: String? = null
 )
 
 data class VideoGenerationProgress(

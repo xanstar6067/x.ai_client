@@ -1,6 +1,7 @@
 package com.adam.xai_client.ui.videos
 
 import android.Manifest
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.MediaController
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
@@ -97,6 +99,7 @@ fun VideoGenerationScreen(
     state: VideoGenerationUiState,
     onPromptChange: (String) -> Unit,
     onSourceImageUrlChange: (String) -> Unit,
+    onSourceImageFileSelected: (Uri) -> Unit,
     onDurationChange: (Int) -> Unit,
     onAspectRatioChange: (String) -> Unit,
     onResolutionChange: (String) -> Unit,
@@ -141,6 +144,11 @@ fun VideoGenerationScreen(
             onStoragePermissionDenied()
         }
         pendingSaveMessageId = 0L
+    }
+    val sourceImagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let(onSourceImageFileSelected)
     }
 
     TransientSnackbar(
@@ -207,6 +215,7 @@ fun VideoGenerationScreen(
                 padding = padding,
                 onPromptChange = onPromptChange,
                 onSourceImageUrlChange = onSourceImageUrlChange,
+                onPickSourceImage = { sourceImagePicker.launch(arrayOf("image/jpeg", "image/png")) },
                 onModelSelected = onModelSelected,
                 onUpdateUserMessage = onUpdateUserMessage,
                 onDeleteMessage = onDeleteMessage,
@@ -405,6 +414,7 @@ private fun VideoChatContent(
     padding: PaddingValues,
     onPromptChange: (String) -> Unit,
     onSourceImageUrlChange: (String) -> Unit,
+    onPickSourceImage: () -> Unit,
     onModelSelected: (String) -> Unit,
     onUpdateUserMessage: (Long, String) -> Unit,
     onDeleteMessage: (Long) -> Unit,
@@ -485,6 +495,7 @@ private fun VideoChatContent(
             state = state,
             onPromptChange = onPromptChange,
             onSourceImageUrlChange = onSourceImageUrlChange,
+            onPickSourceImage = onPickSourceImage,
             onGenerate = onGenerate,
             onStopGeneration = onStopGeneration
         )
@@ -568,6 +579,7 @@ private fun VideoPromptBar(
     state: VideoGenerationUiState,
     onPromptChange: (String) -> Unit,
     onSourceImageUrlChange: (String) -> Unit,
+    onPickSourceImage: () -> Unit,
     onGenerate: () -> Unit,
     onStopGeneration: () -> Unit
 ) {
@@ -598,6 +610,14 @@ private fun VideoPromptBar(
                 capitalization = KeyboardCapitalization.None,
                 imeAction = ImeAction.Next
             ),
+            trailingIcon = {
+                IconButton(
+                    onClick = onPickSourceImage,
+                    enabled = !state.isGenerating
+                ) {
+                    Icon(Icons.Filled.Image, contentDescription = "Прикрепить изображение")
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         )
         Row(

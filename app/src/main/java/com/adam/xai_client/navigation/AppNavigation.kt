@@ -88,6 +88,8 @@ fun XaiChatNavHost(container: AppContainer) {
                 onReasoningEffortChange = viewModel::updateReasoningEffort,
                 onContextMessageLimitChange = viewModel::updateContextMessageLimit,
                 onWebSearchEnabledChange = viewModel::updateWebSearchEnabled,
+                onAttachmentSelected = viewModel::attachFile,
+                onRemoveAttachment = viewModel::removePendingAttachment,
                 onResetModelSettings = viewModel::resetModelSettings,
                 onBack = { navController.popBackStack() },
                 onErrorShown = viewModel::clearError
@@ -126,6 +128,8 @@ fun XaiChatNavHost(container: AppContainer) {
                 onReasoningEffortChange = viewModel::updateReasoningEffort,
                 onContextMessageLimitChange = viewModel::updateContextMessageLimit,
                 onWebSearchEnabledChange = viewModel::updateWebSearchEnabled,
+                onAttachmentSelected = viewModel::attachFile,
+                onRemoveAttachment = viewModel::removePendingAttachment,
                 onResetModelSettings = viewModel::resetModelSettings,
                 onBack = { navController.popBackStack() },
                 onErrorShown = viewModel::clearError
@@ -226,6 +230,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 state = state,
                 onPromptChange = viewModel::onPromptChange,
                 onSourceImageUrlChange = viewModel::onSourceImageUrlChange,
+                onSourceImageFileSelected = viewModel::onSourceImageFileSelected,
                 onDurationChange = viewModel::onDurationChange,
                 onAspectRatioChange = viewModel::onAspectRatioChange,
                 onResolutionChange = viewModel::onResolutionChange,

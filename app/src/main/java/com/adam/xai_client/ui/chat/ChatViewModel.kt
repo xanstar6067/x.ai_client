@@ -1,11 +1,13 @@
 package com.adam.xai_client.ui.chat
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.adam.xai_client.AppContainer
+import com.adam.xai_client.data.repository.ChatAttachmentStorage
 import com.adam.xai_client.data.repository.ChatRepository
 import com.adam.xai_client.data.repository.ModelRepository
 import com.adam.xai_client.data.repository.RoleRepository
@@ -13,12 +15,16 @@ import com.adam.xai_client.data.repository.SettingsRepository
 import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.Message
+import com.adam.xai_client.domain.model.MessageAttachment
+import com.adam.xai_client.domain.model.MessageAttachmentKind
 import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.ModelLimits
 import com.adam.xai_client.domain.model.ModelRole
 import com.adam.xai_client.domain.model.ReasoningEffort
 import com.adam.xai_client.domain.model.XaiModelLimits
 import com.adam.xai_client.domain.model.isTextChatModel
+import com.adam.xai_client.domain.model.supportsFileAttachments
+import com.adam.xai_client.domain.model.supportsImageInput
 import com.adam.xai_client.domain.token.TokenCounter
 import com.adam.xai_client.domain.usecase.MessageSendFailedException
 import com.adam.xai_client.domain.usecase.SendMessageUseCase
@@ -43,6 +49,9 @@ data class ChatUiState(
     val selectedRoleId: Long? = null,
     val modelSettings: ChatModelSettings = ChatModelSettings(),
     val selectedModelLimits: ModelLimits? = null,
+    val pendingAttachments: List<MessageAttachment> = emptyList(),
+    val supportsImageAttachments: Boolean = false,
+    val supportsDocumentAttachments: Boolean = false,
     val chatTokenCount: Int = 0,
     val inputTokenCount: Int = 0,
     val availableModels: List<AiModel> = emptyList(),
@@ -57,6 +66,7 @@ data class ChatUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModel(
     private val initialChatId: Long?,
+    private val attachmentStorage: ChatAttachmentStorage,
     private val chatRepository: ChatRepository,
     private val modelRepository: ModelRepository,
     private val roleRepository: RoleRepository,
@@ -136,6 +146,8 @@ class ChatViewModel(
                     it.copy(
                         selectedModelId = selectedModelId,
                         selectedModelLimits = limitsForModelId(selectedModelId),
+                        supportsImageAttachments = supportsImageAttachments(selectedModelId),
+                        supportsDocumentAttachments = supportsDocumentAttachments(selectedModelId),
                         modelSettings = it.modelSettings.normalizedForModel(selectedModelId)
                     )
                 }
@@ -212,6 +224,8 @@ class ChatViewModel(
             it.copy(
                 selectedModelId = modelId,
                 selectedModelLimits = limitsForModelId(modelId),
+                supportsImageAttachments = supportsImageAttachments(modelId),
+                supportsDocumentAttachments = supportsDocumentAttachments(modelId),
                 modelSettings = it.modelSettings.normalizedForModel(modelId),
                 error = null
             )
@@ -248,7 +262,16 @@ class ChatViewModel(
         if (sendJob?.isActive == true) return
         sendJob = viewModelScope.launch {
             val outgoingText = _uiState.value.inputText
-            _uiState.update { it.copy(isSending = true, error = null, inputText = "", inputTokenCount = 0) }
+            val outgoingAttachments = _uiState.value.pendingAttachments
+            _uiState.update {
+                it.copy(
+                    isSending = true,
+                    error = null,
+                    inputText = "",
+                    inputTokenCount = 0,
+                    pendingAttachments = emptyList()
+                )
+            }
 
             runCatching {
                 withTimeout(SEND_TIMEOUT_MS) {
@@ -259,6 +282,7 @@ class ChatViewModel(
                         selectedModelId = state.selectedModelId,
                         selectedRoleId = state.selectedRoleId,
                         modelSettings = state.modelSettings,
+                        attachments = outgoingAttachments,
                         onChatReady = { newChatId ->
                             chatIdFlow.value = newChatId
                             _uiState.update { it.copy(chatId = newChatId) }
@@ -294,6 +318,7 @@ class ChatViewModel(
                         chatId = failedChatId ?: it.chatId,
                         inputText = if (failedChatId == null) outgoingText else "",
                         inputTokenCount = if (failedChatId == null) tokenCounter.count(outgoingText) else 0,
+                        pendingAttachments = if (failedChatId == null) outgoingAttachments else emptyList(),
                         isSending = false,
                         error = throwable.toUserMessage()
                     )
@@ -309,6 +334,41 @@ class ChatViewModel(
         sendJob?.cancel()
         sendJob = null
         _uiState.update { it.copy(isSending = false, error = null) }
+    }
+
+    fun attachFile(uri: Uri, kind: MessageAttachmentKind) {
+        viewModelScope.launch {
+            val state = _uiState.value
+            if (state.isSending) return@launch
+            if (kind == MessageAttachmentKind.IMAGE && !state.supportsImageAttachments) {
+                _uiState.update { it.copy(error = "Выбранная модель не поддерживает изображения.") }
+                return@launch
+            }
+            if (kind == MessageAttachmentKind.DOCUMENT && !state.supportsDocumentAttachments) {
+                _uiState.update { it.copy(error = "Выбранная модель не поддерживает документы.") }
+                return@launch
+            }
+            runCatching { attachmentStorage.copyAttachment(uri, kind) }
+                .onSuccess { attachment ->
+                    _uiState.update {
+                        it.copy(
+                            pendingAttachments = (it.pendingAttachments + attachment).takeLast(MAX_ATTACHMENTS),
+                            error = null
+                        )
+                    }
+                }
+                .onFailure { throwable ->
+                    _uiState.update { it.copy(error = throwable.toUserMessage()) }
+                }
+        }
+    }
+
+    fun removePendingAttachment(index: Int) {
+        val attachment = _uiState.value.pendingAttachments.getOrNull(index) ?: return
+        attachmentStorage.deleteAttachment(attachment)
+        _uiState.update {
+            it.copy(pendingAttachments = it.pendingAttachments.filterIndexed { i, _ -> i != index })
+        }
     }
 
     fun regenerateLastResponse() {
@@ -524,7 +584,9 @@ class ChatViewModel(
             it.copy(
                 availableModels = available,
                 selectedModelId = effectiveSelectedModel?.id,
-                selectedModelLimits = limitsForModelId(effectiveSelectedModel?.id)
+                selectedModelLimits = limitsForModelId(effectiveSelectedModel?.id),
+                supportsImageAttachments = supportsImageAttachments(effectiveSelectedModel?.id),
+                supportsDocumentAttachments = supportsDocumentAttachments(effectiveSelectedModel?.id)
             )
         }
     }
@@ -580,6 +642,18 @@ class ChatViewModel(
         return XaiModelLimits.forModel(model) ?: XaiModelLimits.forModel(modelId)
     }
 
+    private fun supportsImageAttachments(modelId: String?): Boolean {
+        return modelId?.let { selected ->
+            latestModels.firstOrNull { it.id == selected || selected in it.aliases }
+        }?.supportsImageInput() == true
+    }
+
+    private fun supportsDocumentAttachments(modelId: String?): Boolean {
+        return modelId?.let { selected ->
+            latestModels.firstOrNull { it.id == selected || selected in it.aliases }
+        }?.supportsFileAttachments() == true
+    }
+
     private fun String.isTextChatModelId(models: List<AiModel>): Boolean {
         val model = models.firstOrNull { it.id == this || this in it.aliases }
             ?: AiModel(id = this, name = this, isEnabledForChat = true)
@@ -588,6 +662,7 @@ class ChatViewModel(
 
     companion object {
         private const val SEND_TIMEOUT_MS = 360_000L
+        private const val MAX_ATTACHMENTS = 6
 
         fun factory(
             container: AppContainer,
@@ -596,6 +671,7 @@ class ChatViewModel(
             initializer {
                 ChatViewModel(
                     initialChatId = chatId,
+                    attachmentStorage = container.chatAttachmentStorage,
                     chatRepository = container.chatRepository,
                     modelRepository = container.modelRepository,
                     roleRepository = container.roleRepository,

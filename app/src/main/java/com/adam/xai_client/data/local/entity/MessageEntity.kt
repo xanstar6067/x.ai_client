@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.adam.xai_client.domain.model.MessageAttachment
 import com.adam.xai_client.domain.model.MessageRole
 
 @Entity(
@@ -24,6 +25,7 @@ data class MessageEntity(
     val chatId: Long,
     val role: MessageRole,
     val content: String,
+    val attachments: List<MessageAttachment> = emptyList(),
     val reasoningContent: String? = null,
     val tokenCount: Int? = null,
     val parentMessageId: Long? = null,

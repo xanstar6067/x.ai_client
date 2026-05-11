@@ -1,11 +1,16 @@
 package com.adam.xai_client.ui.chat
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,6 +25,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Info
@@ -29,6 +38,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -44,7 +55,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -56,6 +70,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.ChatModelSettings
+import com.adam.xai_client.domain.model.MessageAttachment
+import com.adam.xai_client.domain.model.MessageAttachmentKind
 import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.ModelLimits
 import com.adam.xai_client.domain.model.ModelRole
@@ -95,6 +111,8 @@ fun ChatScreen(
     onReasoningEffortChange: (ReasoningEffort?) -> Unit,
     onContextMessageLimitChange: (Int) -> Unit,
     onWebSearchEnabledChange: (Boolean) -> Unit,
+    onAttachmentSelected: (Uri, MessageAttachmentKind) -> Unit,
+    onRemoveAttachment: (Int) -> Unit,
     onResetModelSettings: () -> Unit,
     onBack: () -> Unit,
     onErrorShown: () -> Unit
@@ -105,6 +123,12 @@ fun ChatScreen(
     val hapticBack = rememberHapticClick(onBack)
     val hapticModelInfoOpen = rememberHapticClick { onModelInfoOpenChange(true) }
     val hapticModelSettingsOpen = rememberHapticClick { onModelSettingsOpenChange(true) }
+    var pendingAttachmentKind by remember { mutableStateOf(MessageAttachmentKind.IMAGE) }
+    val attachmentPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { onAttachmentSelected(it, pendingAttachmentKind) }
+    }
     TransientSnackbar(
         message = state.error,
         snackbarHostState = snackbarHostState,
@@ -250,10 +274,18 @@ fun ChatScreen(
             ChatInput(
                 inputText = state.inputText,
                 inputTokenCount = state.inputTokenCount,
+                attachments = state.pendingAttachments,
+                supportsImageAttachments = state.supportsImageAttachments,
+                supportsDocumentAttachments = state.supportsDocumentAttachments,
                 webSearchEnabled = state.modelSettings.webSearchEnabled,
                 isSending = state.isSending,
                 onInputChange = onInputChange,
                 onWebSearchEnabledChange = onWebSearchEnabledChange,
+                onPickAttachment = { kind ->
+                    pendingAttachmentKind = kind
+                    attachmentPicker.launch(kind.openDocumentMimeTypes())
+                },
+                onRemoveAttachment = onRemoveAttachment,
                 onSend = onSend,
                 onStopSending = onStopSending
             )
@@ -334,6 +366,206 @@ private fun ChatSelectors(
             onOptionSelected = { onRoleSelected(it.id) },
             modifier = Modifier.weight(1f)
         )
+    }
+}
+
+@Composable
+private fun ChatInput(
+    inputText: String,
+    inputTokenCount: Int,
+    attachments: List<MessageAttachment>,
+    supportsImageAttachments: Boolean,
+    supportsDocumentAttachments: Boolean,
+    webSearchEnabled: Boolean,
+    isSending: Boolean,
+    onInputChange: (String) -> Unit,
+    onWebSearchEnabledChange: (Boolean) -> Unit,
+    onPickAttachment: (MessageAttachmentKind) -> Unit,
+    onRemoveAttachment: (Int) -> Unit,
+    onSend: () -> Unit,
+    onStopSending: () -> Unit
+) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val toggleWebSearch = rememberHapticClick(UiHapticSignal.Toggle) {
+        onWebSearchEnabledChange(!webSearchEnabled)
+    }
+    val sendAndHideKeyboard = {
+        keyboardController?.hide()
+        onSend()
+    }
+    val hapticSendOrStop = rememberHapticClick(
+        if (isSending) UiHapticSignal.Destructive else UiHapticSignal.Confirm,
+        if (isSending) onStopSending else sendAndHideKeyboard
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .imePadding()
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 4.dp)
+    ) {
+        if (attachments.isNotEmpty()) {
+            AttachmentChips(
+                attachments = attachments,
+                onRemoveAttachment = onRemoveAttachment,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+            )
+        }
+        Row(verticalAlignment = Alignment.Bottom) {
+            OutlinedTextField(
+                value = inputText,
+                onValueChange = onInputChange,
+                modifier = Modifier.weight(1f),
+                label = { Text("РЎРѕРѕР±С‰РµРЅРёРµ") },
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    imeAction = ImeAction.Default
+                ),
+                minLines = 1,
+                maxLines = 6,
+                leadingIcon = {
+                    AttachmentMenuButton(
+                        enabled = !isSending && (supportsImageAttachments || supportsDocumentAttachments),
+                        supportsImageAttachments = supportsImageAttachments,
+                        supportsDocumentAttachments = supportsDocumentAttachments,
+                        onPickAttachment = onPickAttachment
+                    )
+                },
+                trailingIcon = {
+                    IconButton(
+                        onClick = toggleWebSearch,
+                        enabled = !isSending
+                    ) {
+                        Icon(
+                            Icons.Filled.Public,
+                            contentDescription = if (webSearchEnabled) {
+                                "РћС‚РєР»СЋС‡РёС‚СЊ РІРµР±-РїРѕРёСЃРє"
+                            } else {
+                                "Р’РєР»СЋС‡РёС‚СЊ РІРµР±-РїРѕРёСЃРє"
+                            },
+                            tint = if (webSearchEnabled) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                }
+            )
+            IconButton(
+                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+                onClick = hapticSendOrStop,
+                enabled = isSending || inputText.isNotBlank() || attachments.isNotEmpty()
+            ) {
+                if (isSending) {
+                    Icon(Icons.Filled.Stop, contentDescription = "РћСЃС‚Р°РЅРѕРІРёС‚СЊ")
+                } else {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "РћС‚РїСЂР°РІРёС‚СЊ")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentMenuButton(
+    enabled: Boolean,
+    supportsImageAttachments: Boolean,
+    supportsDocumentAttachments: Boolean,
+    onPickAttachment: (MessageAttachmentKind) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val hapticOpen = rememberHapticClick { expanded = true }
+    IconButton(
+        onClick = hapticOpen,
+        enabled = enabled
+    ) {
+        Icon(Icons.Filled.Add, contentDescription = "Прикрепить файл")
+    }
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = { expanded = false }
+    ) {
+        if (supportsImageAttachments) {
+            DropdownMenuItem(
+                text = { Text("Изображение") },
+                leadingIcon = { Icon(Icons.Filled.Image, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onPickAttachment(MessageAttachmentKind.IMAGE)
+                }
+            )
+        }
+        if (supportsDocumentAttachments) {
+            DropdownMenuItem(
+                text = { Text("Документ") },
+                leadingIcon = { Icon(Icons.Filled.Description, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onPickAttachment(MessageAttachmentKind.DOCUMENT)
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AttachmentChips(
+    attachments: List<MessageAttachment>,
+    onRemoveAttachment: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        attachments.forEachIndexed { index, attachment ->
+            androidx.compose.material3.InputChip(
+                selected = false,
+                onClick = {},
+                label = {
+                    Text(
+                        text = attachment.displayName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (attachment.kind == MessageAttachmentKind.IMAGE) {
+                            Icons.Filled.Image
+                        } else {
+                            Icons.Filled.Description
+                        },
+                        contentDescription = null
+                    )
+                },
+                trailingIcon = {
+                    IconButton(onClick = { onRemoveAttachment(index) }) {
+                        Icon(Icons.Filled.Close, contentDescription = "Убрать вложение")
+                    }
+                }
+            )
+        }
+    }
+}
+
+private fun MessageAttachmentKind.openDocumentMimeTypes(): Array<String> {
+    return when (this) {
+        MessageAttachmentKind.IMAGE -> arrayOf("image/jpeg", "image/png")
+        MessageAttachmentKind.DOCUMENT -> arrayOf(
+            "text/*",
+            "application/pdf",
+            "application/json",
+            "application/xml",
+            "application/octet-stream"
+        )
+        MessageAttachmentKind.VIDEO -> arrayOf("video/*")
     }
 }
 

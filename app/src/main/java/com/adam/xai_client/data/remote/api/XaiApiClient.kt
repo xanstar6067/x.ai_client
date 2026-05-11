@@ -48,6 +48,12 @@ data class DownloadedVideo(
     }
 }
 
+data class UploadedFile(
+    val id: String,
+    val filename: String,
+    val bytes: Long
+)
+
 interface XaiApiClient {
     suspend fun getModels(
         apiKey: String,
@@ -69,6 +75,14 @@ interface XaiApiClient {
         messages: List<ApiChatMessage>,
         modelSettings: ChatModelSettings = ChatModelSettings()
     ): Flow<ChatStreamDelta>
+
+    suspend fun uploadFile(
+        apiKey: String,
+        baseUrl: String,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray
+    ): UploadedFile
 
     suspend fun generateImage(
         apiKey: String,

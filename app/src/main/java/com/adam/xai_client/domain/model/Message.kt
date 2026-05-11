@@ -5,6 +5,7 @@ data class Message(
     val chatId: Long,
     val role: MessageRole,
     val content: String,
+    val attachments: List<MessageAttachment> = emptyList(),
     val reasoningContent: String? = null,
     val tokenCount: Int = 0,
     val parentMessageId: Long? = null,

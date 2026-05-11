@@ -15,9 +15,11 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -41,6 +43,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.Message
+import com.adam.xai_client.domain.model.MessageAttachmentKind
 import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.ui.haptics.UiHapticSignal
 import com.adam.xai_client.ui.haptics.rememberHapticClick
@@ -158,6 +161,31 @@ fun MessageBubble(
                                 markdown = visibleContent,
                                 color = textColor
                             )
+                        }
+                    }
+                    if (message.attachments.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            message.attachments.forEach { attachment ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (attachment.kind == MessageAttachmentKind.IMAGE) {
+                                            Icons.Filled.Image
+                                        } else {
+                                            Icons.Filled.Description
+                                        },
+                                        contentDescription = null,
+                                        tint = textColor.copy(alpha = 0.78f)
+                                    )
+                                    Text(
+                                        text = attachment.displayName,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = textColor.copy(alpha = 0.78f)
+                                    )
+                                }
+                            }
                         }
                     }
                     Row(

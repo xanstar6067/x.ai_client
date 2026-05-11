@@ -4,7 +4,9 @@ import com.adam.xai_client.data.remote.api.XaiApiClient
 import com.adam.xai_client.data.remote.api.ChatStreamDelta
 import com.adam.xai_client.data.remote.api.DownloadedVideo
 import com.adam.xai_client.data.remote.api.RemoteGeneratedVideo
+import com.adam.xai_client.data.remote.api.UploadedFile
 import com.adam.xai_client.data.remote.dto.ApiChatMessage
+import com.adam.xai_client.data.remote.dto.ApiMessageAttachmentKind
 import com.adam.xai_client.data.remote.dto.ChatCompletionResponseDto
 import com.adam.xai_client.data.remote.dto.ImageEditRequestDto
 import com.adam.xai_client.data.remote.dto.ImageGenerationModelsResponseDto
@@ -15,10 +17,12 @@ import com.adam.xai_client.data.remote.dto.LanguageModelsResponseDto
 import com.adam.xai_client.data.remote.dto.ModelsResponseDto
 import com.adam.xai_client.data.remote.dto.ResponsesResponseDto
 import com.adam.xai_client.data.remote.dto.ResponsesStreamEventDto
+import com.adam.xai_client.data.remote.dto.UploadedFileDto
 import com.adam.xai_client.data.remote.dto.VideoGenerationRequestDto
 import com.adam.xai_client.data.remote.dto.VideoGenerationStartResponseDto
 import com.adam.xai_client.data.remote.dto.VideoGenerationStatusResponseDto
 import com.adam.xai_client.data.remote.dto.VideoGenerationModelsResponseDto
+import com.adam.xai_client.data.remote.dto.VideoEditRequestDto
 import com.adam.xai_client.data.remote.dto.VideoReferenceDto
 import com.adam.xai_client.data.remote.dto.asDomain
 import com.adam.xai_client.data.remote.dto.chatCompletionRequestDto
@@ -37,6 +41,8 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.accept
+import io.ktor.client.request.forms.formData
+import io.ktor.client.request.forms.submitFormWithBinaryData
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -45,6 +51,7 @@ import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.Headers
 import io.ktor.http.headers
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
@@ -60,6 +67,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.Base64
+import java.io.File
 import kotlin.time.Duration.Companion.minutes
 
 class KtorXaiApiClient(
@@ -136,7 +144,7 @@ class KtorXaiApiClient(
         messages: List<ApiChatMessage>,
         modelSettings: ChatModelSettings
     ): String {
-        if (modelId.usesResponsesApi() || modelSettings.webSearchEnabled) {
+        if (modelId.usesResponsesApi() || modelSettings.webSearchEnabled || messages.requiresResponsesApi()) {
             return sendResponsesRequest(
                 apiKey = apiKey,
                 baseUrl = baseUrl,
@@ -174,7 +182,7 @@ class KtorXaiApiClient(
         messages: List<ApiChatMessage>,
         modelSettings: ChatModelSettings
     ): Flow<ChatStreamDelta> {
-        return if (modelId.usesResponsesApi() || modelSettings.webSearchEnabled) {
+        return if (modelId.usesResponsesApi() || modelSettings.webSearchEnabled || messages.requiresResponsesApi()) {
             streamResponsesRequest(
                 apiKey = apiKey,
                 baseUrl = baseUrl,
@@ -191,6 +199,38 @@ class KtorXaiApiClient(
                 modelSettings = modelSettings
             )
         }
+    }
+
+    override suspend fun uploadFile(
+        apiKey: String,
+        baseUrl: String,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray
+    ): UploadedFile {
+        val response = httpClient.submitFormWithBinaryData(
+            url = endpoint(baseUrl, "/files"),
+            formData = formData {
+                append("purpose", "assistants")
+                append(
+                    key = "file",
+                    value = bytes,
+                    headers = Headers.build {
+                        append(HttpHeaders.ContentType, mimeType)
+                        append(HttpHeaders.ContentDisposition, "filename=\"${fileName.escapeMultipartFilename()}\"")
+                    }
+                )
+            }
+        ) {
+            bearerAuth(apiKey)
+        }
+        response.ensureSuccess()
+        val uploaded = response.body<UploadedFileDto>()
+        return UploadedFile(
+            id = uploaded.id,
+            filename = uploaded.filename,
+            bytes = uploaded.bytes
+        )
     }
 
     override suspend fun generateImage(
@@ -244,19 +284,50 @@ class KtorXaiApiClient(
         onProgress: (VideoGenerationProgress) -> Unit
     ): RemoteGeneratedVideo {
         val sourceImageUrl = options.sourceImageUrl?.trim().orEmpty()
-        val response = httpClient.post(endpoint(baseUrl, "/videos/generations")) {
+        val sourceVideoPath = options.sourceVideoFilePath?.trim().orEmpty()
+        val sourceVideoReference = if (sourceVideoPath.isNotBlank()) {
+            val sourceVideo = File(sourceVideoPath)
+            if (!sourceVideo.exists()) {
+                throw XaiApiException(200, "Source video file was not found.")
+            }
+            val uploaded = uploadFile(
+                apiKey = apiKey,
+                baseUrl = baseUrl,
+                fileName = options.sourceVideoFileName ?: sourceVideo.name,
+                mimeType = options.sourceVideoMimeType ?: "video/mp4",
+                bytes = sourceVideo.readBytes()
+            )
+            VideoReferenceDto(fileId = uploaded.id)
+        } else {
+            null
+        }
+        val path = if (sourceVideoReference != null) "/videos/edits" else "/videos/generations"
+        val response = httpClient.post(endpoint(baseUrl, path)) {
             bearerAuth(apiKey)
             contentType(ContentType.Application.Json)
-            setBody(
-                VideoGenerationRequestDto(
-                    model = options.modelId,
-                    prompt = options.prompt,
-                    image = sourceImageUrl.takeIf { it.isNotBlank() }?.let { VideoReferenceDto(url = it) },
-                    duration = options.durationSeconds.coerceIn(1, 15),
-                    aspectRatio = options.aspectRatio,
-                    resolution = options.resolution
+            if (sourceVideoReference != null) {
+                setBody(
+                    VideoEditRequestDto(
+                        model = options.modelId,
+                        prompt = options.prompt,
+                        video = sourceVideoReference,
+                        duration = options.durationSeconds.coerceIn(1, 15),
+                        aspectRatio = options.aspectRatio,
+                        resolution = options.resolution
+                    )
                 )
-            )
+            } else {
+                setBody(
+                    VideoGenerationRequestDto(
+                        model = options.modelId,
+                        prompt = options.prompt,
+                        image = sourceImageUrl.takeIf { it.isNotBlank() }?.let { VideoReferenceDto(url = it) },
+                        duration = options.durationSeconds.coerceIn(1, 15),
+                        aspectRatio = options.aspectRatio,
+                        resolution = options.resolution
+                    )
+                )
+            }
         }
         response.ensureSuccess()
         val requestId = response.body<VideoGenerationStartResponseDto>().requestId
@@ -512,8 +583,18 @@ class KtorXaiApiClient(
         return baseUrl.trim().trimEnd('/') + path
     }
 
+    private fun String.escapeMultipartFilename(): String {
+        return replace("\\", "\\\\").replace("\"", "\\\"")
+    }
+
     private fun String.usesResponsesApi(): Boolean {
         return lowercase().startsWith("grok-4.20-multi-agent")
+    }
+
+    private fun List<ApiChatMessage>.requiresResponsesApi(): Boolean {
+        return any { message ->
+            message.attachments.any { it.kind == ApiMessageAttachmentKind.DOCUMENT }
+        }
     }
 
     private fun ChatModelSettings.forResponsesApi(modelId: String): ChatModelSettings {

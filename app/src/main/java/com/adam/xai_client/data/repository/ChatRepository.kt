@@ -7,6 +7,7 @@ import com.adam.xai_client.data.local.entity.MessageEntity
 import com.adam.xai_client.domain.model.Chat
 import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.Message
+import com.adam.xai_client.domain.model.MessageAttachment
 import com.adam.xai_client.domain.model.MessageRole
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -71,6 +72,7 @@ class ChatRepository(
         chatId: Long,
         role: MessageRole,
         content: String,
+        attachments: List<MessageAttachment> = emptyList(),
         reasoningContent: String? = null,
         tokenCount: Int? = null,
         parentMessageId: Long? = null,
@@ -82,6 +84,7 @@ class ChatRepository(
                     chatId = chatId,
                     role = role,
                     content = content,
+                    attachments = attachments,
                     reasoningContent = reasoningContent,
                     tokenCount = tokenCount,
                     parentMessageId = parentMessageId,

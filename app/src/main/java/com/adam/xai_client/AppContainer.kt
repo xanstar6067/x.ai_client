@@ -6,6 +6,7 @@ import com.adam.xai_client.data.local.database.AppDatabase
 import com.adam.xai_client.data.local.settings.SettingsDataStore
 import com.adam.xai_client.data.remote.api.XaiApiClient
 import com.adam.xai_client.data.remote.client.KtorXaiApiClient
+import com.adam.xai_client.data.repository.ChatAttachmentStorage
 import com.adam.xai_client.data.repository.ChatRepository
 import com.adam.xai_client.data.repository.BackupRepository
 import com.adam.xai_client.data.repository.ImageRepository
@@ -35,7 +36,8 @@ class AppContainer(context: Context) {
         AppDatabase.MIGRATION_8_9,
         AppDatabase.MIGRATION_9_10,
         AppDatabase.MIGRATION_10_11,
-        AppDatabase.MIGRATION_11_12
+        AppDatabase.MIGRATION_11_12,
+        AppDatabase.MIGRATION_12_13
     ).build()
 
     val settingsRepository: SettingsRepository = SettingsRepository(
@@ -47,6 +49,8 @@ class AppContainer(context: Context) {
     val tokenCounter: TokenCounter = TokenCounter()
 
     val backupRepository: BackupRepository = BackupRepository(appContext, database)
+
+    val chatAttachmentStorage: ChatAttachmentStorage = ChatAttachmentStorage(appContext)
 
     val chatRepository: ChatRepository = ChatRepository(database)
 

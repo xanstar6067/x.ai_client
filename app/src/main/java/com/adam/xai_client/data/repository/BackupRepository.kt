@@ -17,6 +17,7 @@ import com.adam.xai_client.data.local.entity.MessageEntity
 import com.adam.xai_client.data.local.entity.ModelRoleEntity
 import com.adam.xai_client.data.local.entity.VideoChatEntity
 import com.adam.xai_client.data.local.entity.VideoMessageEntity
+import com.adam.xai_client.domain.model.MessageAttachment
 import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.ReasoningEffort
 import kotlinx.serialization.Serializable
@@ -423,6 +424,7 @@ private data class BackupMessageDto(
     val chatId: Long,
     val role: String,
     val content: String,
+    val attachments: List<MessageAttachment> = emptyList(),
     val reasoningContent: String?,
     val tokenCount: Int?,
     val parentMessageId: Long?,
@@ -530,6 +532,7 @@ private fun MessageEntity.toBackup(): BackupMessageDto = BackupMessageDto(
     chatId = chatId,
     role = role.name,
     content = content,
+    attachments = attachments,
     reasoningContent = reasoningContent,
     tokenCount = tokenCount,
     parentMessageId = parentMessageId,
@@ -542,6 +545,7 @@ private fun BackupMessageDto.toEntity(): MessageEntity = MessageEntity(
     chatId = chatId,
     role = runCatching { MessageRole.valueOf(role) }.getOrDefault(MessageRole.USER),
     content = content,
+    attachments = attachments,
     reasoningContent = reasoningContent,
     tokenCount = tokenCount,
     parentMessageId = parentMessageId,

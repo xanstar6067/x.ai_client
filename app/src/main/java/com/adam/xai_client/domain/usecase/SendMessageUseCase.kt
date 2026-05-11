@@ -2,13 +2,19 @@ package com.adam.xai_client.domain.usecase
 
 import com.adam.xai_client.data.remote.api.XaiApiClient
 import com.adam.xai_client.data.remote.dto.ApiChatMessage
+import com.adam.xai_client.data.remote.dto.ApiMessageAttachment
+import com.adam.xai_client.data.remote.dto.ApiMessageAttachmentKind
 import com.adam.xai_client.data.repository.ChatRepository
 import com.adam.xai_client.data.repository.RoleRepository
 import com.adam.xai_client.data.repository.SettingsRepository
 import com.adam.xai_client.domain.model.ChatModelSettings
+import com.adam.xai_client.domain.model.MessageAttachment
+import com.adam.xai_client.domain.model.MessageAttachmentKind
 import com.adam.xai_client.domain.model.MessageRole
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
+import java.io.File
+import java.util.Base64
 
 class SendMessageUseCase(
     private val chatRepository: ChatRepository,
@@ -25,10 +31,11 @@ class SendMessageUseCase(
         modelSettings: ChatModelSettings = ChatModelSettings(),
         onChatReady: suspend (Long) -> Unit = {},
         addUserMessage: Boolean = true,
-        parentMessageId: Long? = null
+        parentMessageId: Long? = null,
+        attachments: List<MessageAttachment> = emptyList()
     ): Long {
         val text = input.trim()
-        if (text.isBlank()) {
+        if (text.isBlank() && attachments.isEmpty()) {
             throw UserFacingException("Нельзя отправить пустое сообщение.")
         }
 
@@ -43,8 +50,9 @@ class SendMessageUseCase(
         val effectiveRoleId = effectiveRole?.id
         val now = System.currentTimeMillis()
         val isFirstUserMessage = chatId == null && addUserMessage
+        val titleSeed = text.ifBlank { attachments.firstOrNull()?.displayName.orEmpty() }
         val targetChatId = chatId ?: chatRepository.createChat(
-            title = text.asChatTitle(),
+            title = titleSeed.asChatTitle(),
             selectedModelId = modelId,
             selectedRoleId = effectiveRoleId,
             now = now
@@ -69,6 +77,7 @@ class SendMessageUseCase(
                 chatId = targetChatId,
                 role = MessageRole.USER,
                 content = text,
+                attachments = attachments,
                 parentMessageId = userParentMessageId,
                 now = now
             )
@@ -96,7 +105,11 @@ class SendMessageUseCase(
                     add(
                         ApiChatMessage(
                             role = message.role.apiName,
-                            content = message.content
+                            content = message.content,
+                            attachments = message.attachments.toApiAttachments(
+                                apiKey = settings.apiKey,
+                                baseUrl = settings.baseUrl
+                            )
                         )
                     )
                 }
@@ -171,7 +184,7 @@ class SendMessageUseCase(
             tokenCount = responseTokenCount
         )
         chatRepository.touchChat(targetChatId)
-        if (isFirstUserMessage) {
+        if (isFirstUserMessage && text.isNotBlank()) {
             runCatching { generateChatTitleUseCase(text) }
                 .getOrNull()
                 ?.let { title -> chatRepository.updateChatTitle(targetChatId, title) }
@@ -183,6 +196,42 @@ class SendMessageUseCase(
     private fun String.asChatTitle(): String {
         val firstLine = lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().trim()
         return firstLine.take(48).ifBlank { "Новый чат" }
+    }
+    private suspend fun List<MessageAttachment>.toApiAttachments(
+        apiKey: String,
+        baseUrl: String
+    ): List<ApiMessageAttachment> {
+        return mapNotNull { attachment ->
+            when (attachment.kind) {
+                MessageAttachmentKind.IMAGE -> ApiMessageAttachment(
+                    kind = ApiMessageAttachmentKind.IMAGE,
+                    dataUrl = attachment.toDataUrl()
+                )
+                MessageAttachmentKind.DOCUMENT -> {
+                    val file = File(attachment.filePath)
+                    if (!file.exists()) return@mapNotNull null
+                    val uploaded = apiClient.uploadFile(
+                        apiKey = apiKey,
+                        baseUrl = baseUrl,
+                        fileName = attachment.displayName,
+                        mimeType = attachment.mimeType,
+                        bytes = file.readBytes()
+                    )
+                    ApiMessageAttachment(
+                        kind = ApiMessageAttachmentKind.DOCUMENT,
+                        fileId = uploaded.id
+                    )
+                }
+                MessageAttachmentKind.VIDEO -> null
+            }
+        }
+    }
+
+    private fun MessageAttachment.toDataUrl(): String? {
+        val file = File(filePath)
+        if (!file.exists()) return null
+        val base64 = Base64.getEncoder().encodeToString(file.readBytes())
+        return "data:$mimeType;base64,$base64"
     }
 }
 
