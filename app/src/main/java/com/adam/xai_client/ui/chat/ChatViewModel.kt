@@ -127,12 +127,18 @@ class ChatViewModel(
         viewModelScope.launch {
             chatIdFlow.flatMapLatest { chatRepository.observeMessages(it) }
                 .collect { messages ->
+                    val messagesWithTokenCounts = messages.map { message ->
+                        message.copy(
+                            tokenCount = tokenCounter.countMessage(
+                                message.content,
+                                message.reasoningContent
+                            )
+                        )
+                    }
                     _uiState.update {
                         it.copy(
-                            messages = messages,
-                            chatTokenCount = messages.sumOf { message ->
-                                tokenCounter.countMessage(message.content, message.reasoningContent)
-                            }
+                            messages = messagesWithTokenCounts,
+                            chatTokenCount = messagesWithTokenCounts.sumOf { message -> message.tokenCount }
                         )
                     }
                 }
