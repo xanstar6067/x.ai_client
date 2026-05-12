@@ -468,7 +468,7 @@ data class BackupImportSummary(
 
 @Serializable
 private data class ChatBackupDto(
-    val schemaVersion: Int = 4,
+    val schemaVersion: Int = 5,
     val exportedAt: Long,
     val chats: List<BackupChatDto>,
     val messages: List<BackupMessageDto>,
@@ -497,7 +497,8 @@ private data class BackupChatDto(
     val createdAt: Long,
     val updatedAt: Long,
     val selectedModelId: String?,
-    val selectedRoleId: Long?
+    val selectedRoleId: Long?,
+    val cachedTokenCount: Int = 0
 )
 
 @Serializable
@@ -524,6 +525,7 @@ private data class BackupChatModelSettingsDto(
     val presencePenalty: Double?,
     val reasoningEffort: String?,
     val contextMessageLimit: Int,
+    val webSearchEnabled: Boolean = false,
     val updatedAt: Long
 )
 
@@ -598,7 +600,8 @@ private fun ChatEntity.toBackup(): BackupChatDto = BackupChatDto(
     createdAt = createdAt,
     updatedAt = updatedAt,
     selectedModelId = selectedModelId,
-    selectedRoleId = selectedRoleId
+    selectedRoleId = selectedRoleId,
+    cachedTokenCount = cachedTokenCount
 )
 
 private fun BackupChatDto.toEntity(): ChatEntity = ChatEntity(
@@ -607,7 +610,8 @@ private fun BackupChatDto.toEntity(): ChatEntity = ChatEntity(
     createdAt = createdAt,
     updatedAt = updatedAt,
     selectedModelId = selectedModelId,
-    selectedRoleId = selectedRoleId
+    selectedRoleId = selectedRoleId,
+    cachedTokenCount = cachedTokenCount
 )
 
 private fun MessageEntity.toBackup(mediaEntries: MutableList<BackupMediaEntry>): BackupMessageDto {
@@ -670,6 +674,7 @@ private fun ChatModelSettingsEntity.toBackup(): BackupChatModelSettingsDto = Bac
     presencePenalty = presencePenalty,
     reasoningEffort = reasoningEffort?.name,
     contextMessageLimit = contextMessageLimit,
+    webSearchEnabled = webSearchEnabled,
     updatedAt = updatedAt
 )
 
@@ -682,6 +687,7 @@ private fun BackupChatModelSettingsDto.toEntity(): ChatModelSettingsEntity = Cha
     presencePenalty = presencePenalty,
     reasoningEffort = reasoningEffort?.let { runCatching { ReasoningEffort.valueOf(it) }.getOrNull() },
     contextMessageLimit = contextMessageLimit,
+    webSearchEnabled = webSearchEnabled,
     updatedAt = updatedAt
 )
 

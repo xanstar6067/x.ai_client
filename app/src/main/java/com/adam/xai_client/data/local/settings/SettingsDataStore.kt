@@ -28,7 +28,8 @@ class SettingsDataStore(private val context: Context) {
             ApiSettings(
                 apiKey = preferences[API_KEY].orEmpty(),
                 baseUrl = preferences[BASE_URL]?.takeIf { it.isNotBlank() }
-                    ?: ApiSettings.DEFAULT_BASE_URL
+                    ?: ApiSettings.DEFAULT_BASE_URL,
+                promptCachingEnabled = preferences[PROMPT_CACHING_ENABLED] ?: true
             )
         }
 
@@ -96,9 +97,16 @@ class SettingsDataStore(private val context: Context) {
         }
     }
 
+    suspend fun setPromptCachingEnabled(enabled: Boolean) {
+        context.xaiSettingsDataStore.edit { preferences ->
+            preferences[PROMPT_CACHING_ENABLED] = enabled
+        }
+    }
+
     private companion object {
         val API_KEY = stringPreferencesKey("api_key")
         val BASE_URL = stringPreferencesKey("base_url")
+        val PROMPT_CACHING_ENABLED = booleanPreferencesKey("prompt_caching_enabled")
         val LAST_SELECTED_MODEL_ID = stringPreferencesKey("last_selected_model_id")
         val LAST_SELECTED_ROLE_ID = longPreferencesKey("last_selected_role_id")
         val CHAT_NAMING_MODEL_ID = stringPreferencesKey("chat_naming_model_id")

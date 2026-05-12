@@ -53,6 +53,7 @@ data class ChatUiState(
     val supportsImageAttachments: Boolean = false,
     val supportsDocumentAttachments: Boolean = false,
     val chatTokenCount: Int = 0,
+    val cachedTokenCount: Int = 0,
     val inputTokenCount: Int = 0,
     val availableModels: List<AiModel> = emptyList(),
     val availableRoles: List<ModelRole> = emptyList(),
@@ -106,7 +107,8 @@ class ChatViewModel(
                             it.copy(
                                 chatId = chat.id,
                                 selectedModelId = chat.selectedModelId ?: it.selectedModelId,
-                                selectedRoleId = chat.selectedRoleId ?: it.selectedRoleId
+                                selectedRoleId = chat.selectedRoleId ?: it.selectedRoleId,
+                                cachedTokenCount = chat.cachedTokenCount
                             )
                         }
                         updateAvailableModels(chat.selectedModelId)

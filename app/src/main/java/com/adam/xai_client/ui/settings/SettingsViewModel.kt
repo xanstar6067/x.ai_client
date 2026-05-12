@@ -28,6 +28,7 @@ data class SettingsUiState(
     val baseUrl: String = ApiSettings.DEFAULT_BASE_URL,
     val availableNamingModels: List<AiModel> = emptyList(),
     val selectedNamingModelId: String? = null,
+    val promptCachingEnabled: Boolean = true,
     val streamingHapticsEnabled: Boolean = true,
     val uiHapticsEnabled: Boolean = true,
     val isCheckingConnection: Boolean = false,
@@ -49,7 +50,8 @@ class SettingsViewModel(
                 _uiState.update {
                     it.copy(
                         apiKey = settings.apiKey,
-                        baseUrl = settings.baseUrl
+                        baseUrl = settings.baseUrl,
+                        promptCachingEnabled = settings.promptCachingEnabled
                     )
                 }
             }
@@ -114,6 +116,13 @@ class SettingsViewModel(
         _uiState.update { it.copy(uiHapticsEnabled = enabled, error = null, message = null) }
         viewModelScope.launch {
             settingsRepository.setUiHapticsEnabled(enabled)
+        }
+    }
+
+    fun onPromptCachingChange(enabled: Boolean) {
+        _uiState.update { it.copy(promptCachingEnabled = enabled, error = null, message = null) }
+        viewModelScope.launch {
+            settingsRepository.setPromptCachingEnabled(enabled)
         }
     }
 

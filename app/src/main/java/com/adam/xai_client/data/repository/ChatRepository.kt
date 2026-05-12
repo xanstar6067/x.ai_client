@@ -237,6 +237,11 @@ class ChatRepository(
         chatDao.updateChat(current.copy(updatedAt = updatedAt))
     }
 
+    suspend fun addCachedTokens(chatId: Long, cachedTokens: Int) {
+        if (cachedTokens <= 0) return
+        chatDao.addCachedTokens(chatId, cachedTokens)
+    }
+
     suspend fun updateChatTitle(
         chatId: Long,
         title: String,
@@ -260,7 +265,8 @@ class ChatRepository(
                     id = 0,
                     title = chat.title.asCopyTitle(),
                     createdAt = now,
-                    updatedAt = now
+                    updatedAt = now,
+                    cachedTokenCount = 0
                 )
             )
 

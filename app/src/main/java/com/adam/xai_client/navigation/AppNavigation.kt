@@ -145,6 +145,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 state = state,
                 onApiKeyChange = viewModel::onApiKeyChange,
                 onBaseUrlChange = viewModel::onBaseUrlChange,
+                onPromptCachingChange = viewModel::onPromptCachingChange,
                 onStreamingHapticsChange = viewModel::onStreamingHapticsChange,
                 onUiHapticsChange = viewModel::onUiHapticsChange,
                 onNamingModelSelected = viewModel::onNamingModelSelected,

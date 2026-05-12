@@ -4,6 +4,7 @@ import com.adam.xai_client.data.local.settings.SettingsDataStore
 import com.adam.xai_client.domain.model.ApiSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 class SettingsRepository(
     private val settingsDataStore: SettingsDataStore
@@ -14,6 +15,7 @@ class SettingsRepository(
     val chatNamingModelId: Flow<String?> = settingsDataStore.chatNamingModelId
     val streamingHapticsEnabled: Flow<Boolean> = settingsDataStore.streamingHapticsEnabled
     val uiHapticsEnabled: Flow<Boolean> = settingsDataStore.uiHapticsEnabled
+    val promptCachingEnabled: Flow<Boolean> = apiSettings.map { it.promptCachingEnabled }
 
     suspend fun currentApiSettings(): ApiSettings = apiSettings.first()
 
@@ -39,5 +41,9 @@ class SettingsRepository(
 
     suspend fun setUiHapticsEnabled(enabled: Boolean) {
         settingsDataStore.setUiHapticsEnabled(enabled)
+    }
+
+    suspend fun setPromptCachingEnabled(enabled: Boolean) {
+        settingsDataStore.setPromptCachingEnabled(enabled)
     }
 }

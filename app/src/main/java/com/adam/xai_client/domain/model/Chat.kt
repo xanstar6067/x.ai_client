@@ -6,5 +6,6 @@ data class Chat(
     val createdAt: Long,
     val updatedAt: Long,
     val selectedModelId: String?,
-    val selectedRoleId: Long?
+    val selectedRoleId: Long?,
+    val cachedTokenCount: Int = 0
 )

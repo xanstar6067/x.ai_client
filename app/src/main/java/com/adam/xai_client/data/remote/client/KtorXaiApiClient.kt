@@ -142,7 +142,8 @@ class KtorXaiApiClient(
         baseUrl: String,
         modelId: String,
         messages: List<ApiChatMessage>,
-        modelSettings: ChatModelSettings
+        modelSettings: ChatModelSettings,
+        promptCacheKey: String?
     ): String {
         if (modelId.usesResponsesApi() || modelSettings.webSearchEnabled || messages.requiresResponsesApi()) {
             return sendResponsesRequest(
@@ -150,7 +151,8 @@ class KtorXaiApiClient(
                 baseUrl = baseUrl,
                 modelId = modelId,
                 messages = messages,
-                modelSettings = modelSettings
+                modelSettings = modelSettings,
+                promptCacheKey = promptCacheKey
             )
         }
 
@@ -159,6 +161,7 @@ class KtorXaiApiClient(
             accept(ContentType.Text.EventStream)
             headers {
                 append(HttpHeaders.CacheControl, "no-cache")
+                promptCacheKey?.let { append(X_GROK_CONV_ID_HEADER, it) }
             }
             contentType(ContentType.Application.Json)
             setBody(
@@ -180,7 +183,8 @@ class KtorXaiApiClient(
         baseUrl: String,
         modelId: String,
         messages: List<ApiChatMessage>,
-        modelSettings: ChatModelSettings
+        modelSettings: ChatModelSettings,
+        promptCacheKey: String?
     ): Flow<ChatStreamDelta> {
         return if (modelId.usesResponsesApi() || modelSettings.webSearchEnabled || messages.requiresResponsesApi()) {
             streamResponsesRequest(
@@ -188,7 +192,8 @@ class KtorXaiApiClient(
                 baseUrl = baseUrl,
                 modelId = modelId,
                 messages = messages,
-                modelSettings = modelSettings
+                modelSettings = modelSettings,
+                promptCacheKey = promptCacheKey
             )
         } else {
             streamChatCompletionsRequest(
@@ -196,7 +201,8 @@ class KtorXaiApiClient(
                 baseUrl = baseUrl,
                 modelId = modelId,
                 messages = messages,
-                modelSettings = modelSettings
+                modelSettings = modelSettings,
+                promptCacheKey = promptCacheKey
             )
         }
     }
@@ -407,7 +413,8 @@ class KtorXaiApiClient(
         baseUrl: String,
         modelId: String,
         messages: List<ApiChatMessage>,
-        modelSettings: ChatModelSettings
+        modelSettings: ChatModelSettings,
+        promptCacheKey: String?
     ): String {
         val response = httpClient.post(endpoint(baseUrl, "/responses")) {
             bearerAuth(apiKey)
@@ -417,7 +424,8 @@ class KtorXaiApiClient(
                     model = modelId,
                     messages = messages,
                     stream = false,
-                    settings = modelSettings.forResponsesApi(modelId)
+                    settings = modelSettings.forResponsesApi(modelId),
+                    promptCacheKey = promptCacheKey
                 )
             )
         }
@@ -430,10 +438,14 @@ class KtorXaiApiClient(
         baseUrl: String,
         modelId: String,
         messages: List<ApiChatMessage>,
-        modelSettings: ChatModelSettings
+        modelSettings: ChatModelSettings,
+        promptCacheKey: String?
     ): Flow<ChatStreamDelta> = flow {
         val response = httpClient.post(endpoint(baseUrl, "/chat/completions")) {
             bearerAuth(apiKey)
+            headers {
+                promptCacheKey?.let { append(X_GROK_CONV_ID_HEADER, it) }
+            }
             contentType(ContentType.Application.Json)
             setBody(
                 chatCompletionRequestDto(
@@ -471,7 +483,8 @@ class KtorXaiApiClient(
         baseUrl: String,
         modelId: String,
         messages: List<ApiChatMessage>,
-        modelSettings: ChatModelSettings
+        modelSettings: ChatModelSettings,
+        promptCacheKey: String?
     ): Flow<ChatStreamDelta> = flow {
         val response = httpClient.post(endpoint(baseUrl, "/responses")) {
             bearerAuth(apiKey)
@@ -481,7 +494,8 @@ class KtorXaiApiClient(
                     model = modelId,
                     messages = messages,
                     stream = true,
-                    settings = modelSettings.forResponsesApi(modelId)
+                    settings = modelSettings.forResponsesApi(modelId),
+                    promptCacheKey = promptCacheKey
                 )
             )
         }
@@ -639,6 +653,7 @@ class KtorXaiApiClient(
 
     private companion object {
         const val VIDEO_POLL_INTERVAL_MS = 5_000L
+        const val X_GROK_CONV_ID_HEADER = "x-grok-conv-id"
         val VIDEO_POLL_TIMEOUT_MS = 15.minutes.inWholeMilliseconds
     }
 }

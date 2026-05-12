@@ -38,6 +38,8 @@ data class ResponsesRequestDto(
     val model: String,
     val input: List<ApiRequestMessageDto>,
     val stream: Boolean = false,
+    @SerialName("prompt_cache_key")
+    val promptCacheKey: String? = null,
     @SerialName("max_output_tokens")
     val maxOutputTokens: Int? = null,
     val temperature: Double? = null,
@@ -101,11 +103,13 @@ fun responsesRequestDto(
     model: String,
     messages: List<ApiChatMessage>,
     stream: Boolean,
-    settings: ChatModelSettings
+    settings: ChatModelSettings,
+    promptCacheKey: String? = null
 ): ResponsesRequestDto = ResponsesRequestDto(
     model = model,
     input = messages.map { it.toResponsesMessage() },
     stream = stream,
+    promptCacheKey = promptCacheKey,
     maxOutputTokens = settings.maxTokens,
     temperature = settings.temperature,
     topP = settings.topP,

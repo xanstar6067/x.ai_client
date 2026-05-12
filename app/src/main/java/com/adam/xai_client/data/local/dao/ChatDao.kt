@@ -32,6 +32,9 @@ interface ChatDao {
     @Update
     suspend fun updateChat(chat: ChatEntity)
 
+    @Query("UPDATE chats SET cachedTokenCount = cachedTokenCount + :cachedTokens WHERE id = :chatId")
+    suspend fun addCachedTokens(chatId: Long, cachedTokens: Int)
+
     @Delete
     suspend fun deleteChat(chat: ChatEntity)
 

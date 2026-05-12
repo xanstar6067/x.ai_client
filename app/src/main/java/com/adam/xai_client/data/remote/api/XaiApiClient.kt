@@ -65,7 +65,8 @@ interface XaiApiClient {
         baseUrl: String,
         modelId: String,
         messages: List<ApiChatMessage>,
-        modelSettings: ChatModelSettings = ChatModelSettings()
+        modelSettings: ChatModelSettings = ChatModelSettings(),
+        promptCacheKey: String? = null
     ): String
 
     fun streamChatRequest(
@@ -73,7 +74,8 @@ interface XaiApiClient {
         baseUrl: String,
         modelId: String,
         messages: List<ApiChatMessage>,
-        modelSettings: ChatModelSettings = ChatModelSettings()
+        modelSettings: ChatModelSettings = ChatModelSettings(),
+        promptCacheKey: String? = null
     ): Flow<ChatStreamDelta>
 
     suspend fun uploadFile(

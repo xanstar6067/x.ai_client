@@ -176,6 +176,7 @@ fun ChatScreen(
                         )
                         TokenSummaryInline(
                             chatTokenCount = state.chatTokenCount,
+                            cachedTokenCount = state.cachedTokenCount,
                             inputTokenCount = state.inputTokenCount
                         )
                     }
@@ -321,10 +322,12 @@ fun ChatScreen(
 @Composable
 private fun TokenSummaryInline(
     chatTokenCount: Int,
+    cachedTokenCount: Int,
     inputTokenCount: Int
 ) {
+    val cachedText = if (cachedTokenCount > 0) " | Кэш $cachedTokenCount" else ""
     Text(
-        text = "Ввод $inputTokenCount | Всего ${chatTokenCount + inputTokenCount}",
+        text = "Ввод $inputTokenCount | Всего ${chatTokenCount + inputTokenCount}$cachedText",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1,

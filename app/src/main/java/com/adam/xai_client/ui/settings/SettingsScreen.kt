@@ -52,6 +52,7 @@ fun SettingsScreen(
     state: SettingsUiState,
     onApiKeyChange: (String) -> Unit,
     onBaseUrlChange: (String) -> Unit,
+    onPromptCachingChange: (Boolean) -> Unit,
     onStreamingHapticsChange: (Boolean) -> Unit,
     onUiHapticsChange: (Boolean) -> Unit,
     onNamingModelSelected: (String) -> Unit,
@@ -67,6 +68,7 @@ fun SettingsScreen(
     val hapticToggleKey = rememberHapticClick(UiHapticSignal.Toggle) { showKey = !showKey }
     val hapticStreamingHapticsChange = rememberHapticValueChange(onStreamingHapticsChange)
     val hapticUiHapticsChange = rememberHapticValueChange(onUiHapticsChange)
+    val hapticPromptCachingChange = rememberHapticValueChange(onPromptCachingChange)
     val hapticOpenModels = rememberHapticClick(onOpenModels)
     val hapticSave = rememberHapticClick(UiHapticSignal.Confirm, onSave)
     val hapticCheckConnection = rememberHapticClick(onCheckConnection)
@@ -148,6 +150,27 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Кэширование API",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        text = "Для текстовых Grok-чатов отправляется стабильный ключ диалога, чтобы xAI мог переиспользовать общий префикс сообщений.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = state.promptCachingEnabled,
+                    onCheckedChange = hapticPromptCachingChange
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,

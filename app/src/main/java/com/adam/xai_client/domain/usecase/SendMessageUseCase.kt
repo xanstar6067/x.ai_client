@@ -132,7 +132,8 @@ class SendMessageUseCase(
                 baseUrl = settings.baseUrl,
                 modelId = modelId,
                 messages = requestMessages,
-                modelSettings = effectiveModelSettings
+                modelSettings = effectiveModelSettings,
+                promptCacheKey = targetChatId.toPromptCacheKey().takeIf { settings.promptCachingEnabled }
             ).collect { delta ->
                 if (delta.content.isNotEmpty()) {
                     assistantReply.append(delta.content)
@@ -142,6 +143,7 @@ class SendMessageUseCase(
                 }
                 delta.tokenUsage?.let { usage ->
                     responseTokenCount = usage.totalTokens.takeIf { it > 0 }
+                    chatRepository.addCachedTokens(targetChatId, usage.cachedTokens)
                 }
                 if (delta.content.isNotEmpty() || delta.reasoningContent.isNotEmpty()) {
                     chatRepository.updateMessageContent(
@@ -197,6 +199,9 @@ class SendMessageUseCase(
         val firstLine = lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().trim()
         return firstLine.take(48).ifBlank { "Новый чат" }
     }
+
+    private fun Long.toPromptCacheKey(): String = "xai-chat-$this"
+
     private suspend fun List<MessageAttachment>.toApiAttachments(
         apiKey: String,
         baseUrl: String
