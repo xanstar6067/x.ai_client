@@ -64,6 +64,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.Base64
@@ -585,10 +587,22 @@ class KtorXaiApiClient(
             ?.takeIf { it.isNotBlank() }
             ?: event.responseId?.takeIf { it.isNotBlank() }
         val eventUsage = event.response?.usage?.asDomain()
+        val reasoningDelta = if (event.type?.contains("reasoning", ignoreCase = true) == true) {
+            event.delta?.takeIf { it.isNotEmpty() }
+                ?: event.text?.takeIf { it.isNotEmpty() }
+                ?: payload.stringField("delta")
+                ?: payload.stringField("text")
+                ?: payload.stringField("summary")
+        } else {
+            null
+        }
         when (event.type) {
             "response.output_text.delta" -> event.delta?.takeIf { it.isNotEmpty() }?.let {
                 emit(ChatStreamDelta(content = it))
             }
+        }
+        reasoningDelta?.let {
+            emit(ChatStreamDelta(reasoningContent = it))
         }
         if (eventResponseId != null || eventUsage != null) {
             emit(
@@ -607,6 +621,13 @@ class KtorXaiApiClient(
             ?: error["code"]?.jsonPrimitive?.content
             ?: payload.take(500)
         throw XaiApiException(200, message)
+    }
+
+    private fun String.stringField(name: String): String? {
+        val root = runCatching { json.parseToJsonElement(this).jsonObject }.getOrNull() ?: return null
+        return (root[name] as? JsonPrimitive)
+            ?.contentOrNull
+            ?.takeIf { it.isNotEmpty() }
     }
 
     private fun JsonElement.jsonObjectOrNull(): JsonObject? = this as? JsonObject

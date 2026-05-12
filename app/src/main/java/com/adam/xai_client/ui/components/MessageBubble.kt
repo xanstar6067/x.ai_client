@@ -1,5 +1,6 @@
 package com.adam.xai_client.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -308,38 +309,49 @@ private fun ReasoningBlock(
 ) {
     val copyReasoning = rememberHapticClick(onCopy)
     val toggleReasoning = rememberHapticClick(UiHapticSignal.Toggle, onToggle)
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.36f),
+        contentColor = textColor,
+        shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(1.dp, textColor.copy(alpha = 0.16f))
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(
-                text = "Рассуждение",
-                style = MaterialTheme.typography.labelMedium,
-                color = textColor.copy(alpha = 0.78f),
-                modifier = Modifier.weight(1f)
-            )
-            IconButton(onClick = copyReasoning) {
-                Icon(
-                    Icons.Filled.ContentCopy,
-                    contentDescription = "Копировать рассуждение",
-                    tint = textColor.copy(alpha = 0.78f)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Рассуждение",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = textColor.copy(alpha = 0.78f),
+                    modifier = Modifier.weight(1f)
                 )
+                IconButton(onClick = copyReasoning) {
+                    Icon(
+                        Icons.Filled.ContentCopy,
+                        contentDescription = "Копировать рассуждение",
+                        tint = textColor.copy(alpha = 0.78f)
+                    )
+                }
+                IconButton(onClick = toggleReasoning) {
+                    Icon(
+                        if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = if (isExpanded) "Свернуть рассуждение" else "Показать рассуждение",
+                        tint = textColor.copy(alpha = 0.78f)
+                    )
+                }
             }
-            IconButton(onClick = toggleReasoning) {
-                Icon(
-                    if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = if (isExpanded) "Свернуть рассуждение" else "Показать рассуждение",
-                    tint = textColor.copy(alpha = 0.78f)
-                )
-            }
-        }
-        if (isExpanded) {
-            SelectionContainer {
-                MarkdownText(
-                    markdown = reasoning,
-                    color = textColor.copy(alpha = 0.78f)
-                )
+            if (isExpanded) {
+                SelectionContainer {
+                    MarkdownText(
+                        markdown = reasoning,
+                        color = textColor.copy(alpha = 0.78f)
+                    )
+                }
             }
         }
     }
