@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ChevronLeft
@@ -157,12 +156,10 @@ fun MessageBubble(
                         }
                     }
                     if (visibleContent.isNotBlank()) {
-                        SelectionContainer {
-                            MarkdownText(
-                                markdown = visibleContent,
-                                color = textColor
-                            )
-                        }
+                        MarkdownText(
+                            markdown = visibleContent,
+                            color = textColor
+                        )
                     }
                     if (message.attachments.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -346,12 +343,10 @@ private fun ReasoningBlock(
                 }
             }
             if (isExpanded) {
-                SelectionContainer {
-                    MarkdownText(
-                        markdown = reasoning,
-                        color = textColor.copy(alpha = 0.78f)
-                    )
-                }
+                MarkdownText(
+                    markdown = reasoning,
+                    color = textColor.copy(alpha = 0.78f)
+                )
             }
         }
     }
