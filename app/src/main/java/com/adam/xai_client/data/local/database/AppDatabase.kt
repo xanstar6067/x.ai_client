@@ -36,7 +36,7 @@ import com.adam.xai_client.data.local.entity.VideoMessageEntity
         VideoChatEntity::class,
         VideoMessageEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)
@@ -231,6 +231,12 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE chats ADD COLUMN lastCompletionTokenCount INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE chats ADD COLUMN lastCachedTokenCount INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE chats ADD COLUMN lastReasoningTokenCount INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN responseId TEXT")
             }
         }
 

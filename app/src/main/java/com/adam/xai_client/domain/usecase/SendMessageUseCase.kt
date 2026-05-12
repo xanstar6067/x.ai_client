@@ -8,6 +8,7 @@ import com.adam.xai_client.data.repository.ChatRepository
 import com.adam.xai_client.data.repository.RoleRepository
 import com.adam.xai_client.data.repository.SettingsRepository
 import com.adam.xai_client.domain.model.ChatModelSettings
+import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.MessageAttachment
 import com.adam.xai_client.domain.model.MessageAttachmentKind
 import com.adam.xai_client.domain.model.MessageRole
@@ -97,12 +98,19 @@ class SendMessageUseCase(
             .takeIf { it > 0 }
             ?.let { limit -> history.takeLast(limit) }
             ?: history
+        val canUseResponsesContinuation = modelId.usesResponsesApiPath(effectiveModelSettings, contextHistory)
+        val responseContinuation = if (canUseResponsesContinuation && effectiveModelSettings.contextMessageLimit == 0) {
+            contextHistory.responseContinuation()
+        } else {
+            null
+        }
+        val requestHistory = responseContinuation?.messagesAfterPreviousResponse ?: contextHistory
         val requestMessages = buildList {
             val systemPrompt = effectiveRole?.prompt.orEmpty().trim()
-            if (systemPrompt.isNotBlank()) {
+            if (systemPrompt.isNotBlank() && responseContinuation == null) {
                 add(ApiChatMessage(role = MessageRole.SYSTEM.apiName, content = systemPrompt))
             }
-            contextHistory
+            requestHistory
                 .filter { it.role != MessageRole.SYSTEM }
                 .forEach { message ->
                     add(
@@ -131,6 +139,8 @@ class SendMessageUseCase(
 
         val assistantReply = StringBuilder()
         val reasoningContent = StringBuilder()
+        var assistantResponseId: String? = null
+        var tokenUsageApplied = false
         try {
             apiClient.streamChatRequest(
                 apiKey = settings.apiKey,
@@ -138,7 +148,8 @@ class SendMessageUseCase(
                 modelId = modelId,
                 messages = requestMessages,
                 modelSettings = effectiveModelSettings,
-                promptCacheKey = targetChatId.toPromptCacheKey().takeIf { settings.promptCachingEnabled }
+                promptCacheKey = targetChatId.toPromptCacheKey().takeIf { settings.promptCachingEnabled },
+                previousResponseId = responseContinuation?.previousResponseId
             ).collect { delta ->
                 if (delta.content.isNotEmpty()) {
                     assistantReply.append(delta.content)
@@ -146,14 +157,25 @@ class SendMessageUseCase(
                 if (delta.reasoningContent.isNotEmpty()) {
                     reasoningContent.append(delta.reasoningContent)
                 }
-                delta.tokenUsage?.let { usage ->
+                val responseId = delta.responseId?.takeIf { it.isNotBlank() }
+                    ?.also { assistantResponseId = it }
+                delta.tokenUsage?.takeUnless { tokenUsageApplied }?.let { usage ->
                     chatRepository.updateTokenUsage(targetChatId, usage)
+                    tokenUsageApplied = true
                 }
                 if (delta.content.isNotEmpty() || delta.reasoningContent.isNotEmpty()) {
                     chatRepository.updateMessageContent(
                         messageId = assistantMessageId,
                         content = assistantReply.toString(),
                         reasoningContent = reasoningContent.toString().ifBlank { null }
+                    )
+                }
+                responseId?.let {
+                    chatRepository.updateMessageContent(
+                        messageId = assistantMessageId,
+                        content = assistantReply.toString(),
+                        reasoningContent = reasoningContent.toString().ifBlank { null },
+                        responseId = it
                     )
                 }
             }
@@ -187,6 +209,7 @@ class SendMessageUseCase(
             messageId = assistantMessageId,
             content = finalReply,
             reasoningContent = finalReasoning.ifBlank { null },
+            responseId = assistantResponseId,
             tokenCount = tokenCounter.countMessage(finalReply, finalReasoning)
         )
         chatRepository.touchChat(targetChatId)
@@ -205,6 +228,37 @@ class SendMessageUseCase(
     }
 
     private fun Long.toPromptCacheKey(): String = "xai-chat-$this"
+
+    private fun String.usesResponsesApiPath(
+        settings: ChatModelSettings,
+        history: List<Message>
+    ): Boolean {
+        return lowercase().startsWith("grok-4") ||
+            settings.webSearchEnabled ||
+            history.any { message ->
+                message.attachments.any { it.kind == MessageAttachmentKind.DOCUMENT }
+            }
+    }
+
+    private data class ResponseContinuation(
+        val previousResponseId: String,
+        val messagesAfterPreviousResponse: List<Message>
+    )
+
+    private fun List<Message>.responseContinuation(): ResponseContinuation? {
+        if (isEmpty() || last().role != MessageRole.USER) return null
+        val previousResponseIndex = dropLast(1).indexOfLast { message ->
+            message.role == MessageRole.ASSISTANT && !message.responseId.isNullOrBlank()
+        }
+        if (previousResponseIndex < 0) return null
+        val previousResponseId = this[previousResponseIndex].responseId ?: return null
+        val messagesAfterPreviousResponse = drop(previousResponseIndex + 1)
+        if (messagesAfterPreviousResponse.none { it.role == MessageRole.USER }) return null
+        return ResponseContinuation(
+            previousResponseId = previousResponseId,
+            messagesAfterPreviousResponse = messagesAfterPreviousResponse
+        )
+    }
 
     private suspend fun List<MessageAttachment>.toApiAttachments(
         apiKey: String,

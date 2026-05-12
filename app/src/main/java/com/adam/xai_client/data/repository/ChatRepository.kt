@@ -75,6 +75,7 @@ class ChatRepository(
         content: String,
         attachments: List<MessageAttachment> = emptyList(),
         reasoningContent: String? = null,
+        responseId: String? = null,
         tokenCount: Int? = null,
         parentMessageId: Long? = null,
         now: Long = System.currentTimeMillis()
@@ -87,6 +88,7 @@ class ChatRepository(
                     content = content,
                     attachments = attachments,
                     reasoningContent = reasoningContent,
+                    responseId = responseId,
                     tokenCount = tokenCount,
                     parentMessageId = parentMessageId,
                     createdAt = now
@@ -103,12 +105,14 @@ class ChatRepository(
         messageId: Long,
         content: String,
         reasoningContent: String?,
+        responseId: String? = null,
         tokenCount: Int? = null
     ) {
         messageDao.updateMessageContent(
             messageId = messageId,
             content = content,
             reasoningContent = reasoningContent,
+            responseId = responseId,
             tokenCount = tokenCount
         )
     }
@@ -123,8 +127,10 @@ class ChatRepository(
             messageId = messageId,
             content = trimmedContent,
             reasoningContent = reasoningContent,
+            responseId = null,
             tokenCount = null
         )
+        messageDao.clearResponseId(messageId)
     }
 
     suspend fun deleteMessage(messageId: Long) {

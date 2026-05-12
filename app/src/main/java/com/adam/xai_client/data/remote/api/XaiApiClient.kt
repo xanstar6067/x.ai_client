@@ -12,7 +12,8 @@ import kotlinx.coroutines.flow.Flow
 data class ChatStreamDelta(
     val content: String = "",
     val reasoningContent: String = "",
-    val tokenUsage: TokenUsage? = null
+    val tokenUsage: TokenUsage? = null,
+    val responseId: String? = null
 )
 
 data class TokenUsage(
@@ -66,7 +67,8 @@ interface XaiApiClient {
         modelId: String,
         messages: List<ApiChatMessage>,
         modelSettings: ChatModelSettings = ChatModelSettings(),
-        promptCacheKey: String? = null
+        promptCacheKey: String? = null,
+        previousResponseId: String? = null
     ): String
 
     fun streamChatRequest(
@@ -75,7 +77,8 @@ interface XaiApiClient {
         modelId: String,
         messages: List<ApiChatMessage>,
         modelSettings: ChatModelSettings = ChatModelSettings(),
-        promptCacheKey: String? = null
+        promptCacheKey: String? = null,
+        previousResponseId: String? = null
     ): Flow<ChatStreamDelta>
 
     suspend fun uploadFile(

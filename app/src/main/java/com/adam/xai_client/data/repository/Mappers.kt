@@ -41,6 +41,7 @@ internal fun MessageEntity.asDomain(): Message = Message(
     content = content,
     attachments = attachments,
     reasoningContent = reasoningContent,
+    responseId = responseId,
     tokenCount = tokenCount ?: 0,
     parentMessageId = parentMessageId,
     activeChildMessageId = activeChildMessageId,

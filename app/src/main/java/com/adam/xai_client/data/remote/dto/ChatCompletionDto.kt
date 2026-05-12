@@ -40,6 +40,8 @@ data class ResponsesRequestDto(
     val stream: Boolean = false,
     @SerialName("prompt_cache_key")
     val promptCacheKey: String? = null,
+    @SerialName("previous_response_id")
+    val previousResponseId: String? = null,
     @SerialName("max_output_tokens")
     val maxOutputTokens: Int? = null,
     val temperature: Double? = null,
@@ -106,12 +108,14 @@ fun responsesRequestDto(
     messages: List<ApiChatMessage>,
     stream: Boolean,
     settings: ChatModelSettings,
-    promptCacheKey: String? = null
+    promptCacheKey: String? = null,
+    previousResponseId: String? = null
 ): ResponsesRequestDto = ResponsesRequestDto(
     model = model,
     input = messages.map { it.toResponsesMessage() },
     stream = stream,
     promptCacheKey = promptCacheKey,
+    previousResponseId = previousResponseId,
     maxOutputTokens = settings.maxTokens,
     temperature = settings.temperature,
     topP = settings.topP,
@@ -246,6 +250,7 @@ data class CompletionTokensDetailsDto(
 
 @Serializable
 data class ResponsesResponseDto(
+    val id: String? = null,
     val output: List<ResponsesOutputDto> = emptyList(),
     @SerialName("output_text")
     val outputText: String? = null,
@@ -303,6 +308,8 @@ data class ResponsesStreamEventDto(
     val type: String? = null,
     val delta: String? = null,
     val text: String? = null,
+    @SerialName("response_id")
+    val responseId: String? = null,
     val response: ResponsesResponseDto? = null
 )
 

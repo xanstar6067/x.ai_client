@@ -27,6 +27,7 @@ data class MessageEntity(
     val content: String,
     val attachments: List<MessageAttachment> = emptyList(),
     val reasoningContent: String? = null,
+    val responseId: String? = null,
     val tokenCount: Int? = null,
     val parentMessageId: Long? = null,
     val activeChildMessageId: Long? = null,

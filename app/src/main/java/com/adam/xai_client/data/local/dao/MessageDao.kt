@@ -30,13 +30,17 @@ interface MessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessages(messages: List<MessageEntity>)
 
-    @Query("UPDATE messages SET content = :content, reasoningContent = :reasoningContent, tokenCount = :tokenCount WHERE id = :messageId")
+    @Query("UPDATE messages SET content = :content, reasoningContent = :reasoningContent, responseId = COALESCE(:responseId, responseId), tokenCount = :tokenCount WHERE id = :messageId")
     suspend fun updateMessageContent(
         messageId: Long,
         content: String,
         reasoningContent: String?,
+        responseId: String?,
         tokenCount: Int?
     )
+
+    @Query("UPDATE messages SET responseId = NULL WHERE id = :messageId")
+    suspend fun clearResponseId(messageId: Long)
 
     @Query("UPDATE messages SET activeChildMessageId = :activeChildMessageId WHERE id = :messageId")
     suspend fun updateActiveChild(messageId: Long, activeChildMessageId: Long?)

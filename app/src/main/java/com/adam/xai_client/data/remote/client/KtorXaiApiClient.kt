@@ -143,7 +143,8 @@ class KtorXaiApiClient(
         modelId: String,
         messages: List<ApiChatMessage>,
         modelSettings: ChatModelSettings,
-        promptCacheKey: String?
+        promptCacheKey: String?,
+        previousResponseId: String?
     ): String {
         if (modelId.usesResponsesApi() || modelSettings.webSearchEnabled || messages.requiresResponsesApi()) {
             return sendResponsesRequest(
@@ -152,7 +153,8 @@ class KtorXaiApiClient(
                 modelId = modelId,
                 messages = messages,
                 modelSettings = modelSettings,
-                promptCacheKey = promptCacheKey
+                promptCacheKey = promptCacheKey,
+                previousResponseId = previousResponseId
             )
         }
 
@@ -184,7 +186,8 @@ class KtorXaiApiClient(
         modelId: String,
         messages: List<ApiChatMessage>,
         modelSettings: ChatModelSettings,
-        promptCacheKey: String?
+        promptCacheKey: String?,
+        previousResponseId: String?
     ): Flow<ChatStreamDelta> {
         return if (modelId.usesResponsesApi() || modelSettings.webSearchEnabled || messages.requiresResponsesApi()) {
             streamResponsesRequest(
@@ -193,7 +196,8 @@ class KtorXaiApiClient(
                 modelId = modelId,
                 messages = messages,
                 modelSettings = modelSettings,
-                promptCacheKey = promptCacheKey
+                promptCacheKey = promptCacheKey,
+                previousResponseId = previousResponseId
             )
         } else {
             streamChatCompletionsRequest(
@@ -414,7 +418,8 @@ class KtorXaiApiClient(
         modelId: String,
         messages: List<ApiChatMessage>,
         modelSettings: ChatModelSettings,
-        promptCacheKey: String?
+        promptCacheKey: String?,
+        previousResponseId: String?
     ): String {
         val response = httpClient.post(endpoint(baseUrl, "/responses")) {
             bearerAuth(apiKey)
@@ -425,7 +430,8 @@ class KtorXaiApiClient(
                     messages = messages,
                     stream = false,
                     settings = modelSettings.forResponsesApi(modelId),
-                    promptCacheKey = promptCacheKey
+                    promptCacheKey = promptCacheKey,
+                    previousResponseId = previousResponseId
                 )
             )
         }
@@ -484,7 +490,8 @@ class KtorXaiApiClient(
         modelId: String,
         messages: List<ApiChatMessage>,
         modelSettings: ChatModelSettings,
-        promptCacheKey: String?
+        promptCacheKey: String?,
+        previousResponseId: String?
     ): Flow<ChatStreamDelta> = flow {
         val response = httpClient.post(endpoint(baseUrl, "/responses")) {
             bearerAuth(apiKey)
@@ -495,7 +502,8 @@ class KtorXaiApiClient(
                     messages = messages,
                     stream = true,
                     settings = modelSettings.forResponsesApi(modelId),
-                    promptCacheKey = promptCacheKey
+                    promptCacheKey = promptCacheKey,
+                    previousResponseId = previousResponseId
                 )
             )
         }
@@ -510,8 +518,9 @@ class KtorXaiApiClient(
                 val completion = json.decodeFromString<ResponsesResponseDto>(line)
                 val text = completion.outputTextContent()
                 val tokenUsage = completion.usage?.asDomain()
-                if (text.isNotEmpty() || tokenUsage != null) {
-                    emit(ChatStreamDelta(content = text, tokenUsage = tokenUsage))
+                val responseId = completion.id?.takeIf { it.isNotBlank() }
+                if (text.isNotEmpty() || tokenUsage != null || responseId != null) {
+                    emit(ChatStreamDelta(content = text, tokenUsage = tokenUsage, responseId = responseId))
                 }
                 return@flow
             }
@@ -572,13 +581,22 @@ class KtorXaiApiClient(
 
         throwIfApiError(payload)
         val event = json.decodeFromString<ResponsesStreamEventDto>(payload)
+        val eventResponseId = event.response?.id
+            ?.takeIf { it.isNotBlank() }
+            ?: event.responseId?.takeIf { it.isNotBlank() }
+        val eventUsage = event.response?.usage?.asDomain()
         when (event.type) {
             "response.output_text.delta" -> event.delta?.takeIf { it.isNotEmpty() }?.let {
                 emit(ChatStreamDelta(content = it))
             }
-            "response.completed" -> event.response?.usage?.asDomain()?.let {
-                emit(ChatStreamDelta(tokenUsage = it))
-            }
+        }
+        if (eventResponseId != null || eventUsage != null) {
+            emit(
+                ChatStreamDelta(
+                    tokenUsage = eventUsage,
+                    responseId = eventResponseId
+                )
+            )
         }
     }
 
@@ -602,6 +620,10 @@ class KtorXaiApiClient(
     }
 
     private fun String.usesResponsesApi(): Boolean {
+        return lowercase().startsWith("grok-4")
+    }
+
+    private fun String.usesMultiAgentResponsesApi(): Boolean {
         return lowercase().startsWith("grok-4.20-multi-agent")
     }
 
@@ -612,7 +634,7 @@ class KtorXaiApiClient(
     }
 
     private fun ChatModelSettings.forResponsesApi(modelId: String): ChatModelSettings {
-        return if (modelId.usesResponsesApi()) copy(maxTokens = null) else this
+        return if (modelId.usesMultiAgentResponsesApi()) copy(maxTokens = null) else this
     }
 
     private fun List<AiModel>.mergeModelsById(): List<AiModel> {
