@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,8 +19,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +31,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
@@ -51,14 +58,17 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,9 +78,11 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.ChatModelSettings
+import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.MessageAttachment
 import com.adam.xai_client.domain.model.MessageAttachmentKind
 import com.adam.xai_client.domain.model.MessageRole
@@ -87,6 +99,8 @@ import com.adam.xai_client.ui.haptics.StreamingResponseHaptics
 import com.adam.xai_client.ui.haptics.UiHapticSignal
 import com.adam.xai_client.ui.haptics.rememberHapticClick
 import com.adam.xai_client.ui.haptics.rememberHapticValueChange
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -231,42 +245,52 @@ fun ChatScreen(
                     )
                 }
             } else {
-                LazyColumn(
-                    state = listState,
+                BoxWithConstraints(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                        .fillMaxWidth()
                 ) {
-                    items(
-                        items = state.messages,
-                        key = { it.id }
-                    ) { message ->
-                        val isLastMessage = message.id == state.messages.lastOrNull()?.id
-                        MessageBubble(
-                            message = message,
-                            isPending = state.isSending &&
-                                isLastMessage &&
-                                message.role == MessageRole.ASSISTANT &&
-                                message.content.isBlank() &&
-                                message.reasoningContent.isNullOrBlank(),
-                            canRegenerate = !state.isSending &&
-                                message.role == MessageRole.ASSISTANT,
-                            canResend = !state.isSending &&
-                                message.role == MessageRole.USER,
-                            canEdit = !state.isSending,
-                            onCopy = { text ->
-                                clipboardManager.setText(AnnotatedString(text))
-                            },
-                            onRegenerate = { onRegenerate(message.id) },
-                            onResend = { onResendMessage(message.id) },
-                            onPreviousVersion = { onSwitchMessageVersion(message.id, -1) },
-                            onNextVersion = { onSwitchMessageVersion(message.id, 1) },
-                            onEdit = { text -> onUpdateMessage(message.id, text) },
-                            onDelete = { onDeleteMessage(message.id) }
-                        )
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(
+                            items = state.messages,
+                            key = { it.id }
+                        ) { message ->
+                            val isLastMessage = message.id == state.messages.lastOrNull()?.id
+                            MessageBubble(
+                                message = message,
+                                isPending = state.isSending &&
+                                    isLastMessage &&
+                                    message.role == MessageRole.ASSISTANT &&
+                                    message.content.isBlank() &&
+                                    message.reasoningContent.isNullOrBlank(),
+                                canRegenerate = !state.isSending &&
+                                    message.role == MessageRole.ASSISTANT,
+                                canResend = !state.isSending &&
+                                    message.role == MessageRole.USER,
+                                canEdit = !state.isSending,
+                                onCopy = { text ->
+                                    clipboardManager.setText(AnnotatedString(text))
+                                },
+                                onRegenerate = { onRegenerate(message.id) },
+                                onResend = { onResendMessage(message.id) },
+                                onPreviousVersion = { onSwitchMessageVersion(message.id, -1) },
+                                onNextVersion = { onSwitchMessageVersion(message.id, 1) },
+                                onEdit = { text -> onUpdateMessage(message.id, text) },
+                                onDelete = { onDeleteMessage(message.id) }
+                            )
+                        }
                     }
+                    ChatNavigationButtons(
+                        messages = state.messages,
+                        listState = listState,
+                        chatViewportHeight = maxHeight,
+                        modifier = Modifier.matchParentSize()
+                    )
                 }
             }
             ChatInput(
@@ -334,6 +358,98 @@ fun ChatScreen(
             onContextMessageLimitChange = onContextMessageLimitChange,
             onReset = onResetModelSettings
         )
+    }
+}
+
+private data class ChatNavigationPlacement(
+    val alignStart: Boolean,
+    val yFraction: Float
+)
+
+@Composable
+private fun ChatNavigationButtons(
+    messages: List<Message>,
+    listState: LazyListState,
+    chatViewportHeight: Dp,
+    modifier: Modifier = Modifier
+) {
+    val coroutineScope = rememberCoroutineScope()
+    val placement by remember(messages, listState) {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val visibleItems = layoutInfo.visibleItemsInfo
+            val viewportStart = layoutInfo.viewportStartOffset
+            val viewportEnd = layoutInfo.viewportEndOffset
+            val viewportHeightPx = (viewportEnd - viewportStart).coerceAtLeast(1)
+            val viewportCenter = viewportStart + viewportHeightPx / 2
+            val anchorItem = visibleItems.minByOrNull { item ->
+                abs(item.offset + item.size / 2 - viewportCenter)
+            }
+            val anchorIndex = anchorItem?.index
+                ?: listState.firstVisibleItemIndex
+            val anchorMessage = messages.getOrNull(anchorIndex)
+            val alignStart = anchorMessage?.role == MessageRole.USER
+            val anchorCenter = anchorItem?.let { it.offset + it.size / 2 }
+                ?: viewportCenter
+            val yFraction = ((anchorCenter - viewportStart).toFloat() / viewportHeightPx)
+                .coerceIn(0.25f, 0.75f)
+
+            ChatNavigationPlacement(
+                alignStart = alignStart,
+                yFraction = yFraction
+            )
+        }
+    }
+    val columnHeight = 88.dp
+    val targetY = chatViewportHeight * placement.yFraction - columnHeight / 2
+    val minY = chatViewportHeight * 0.25f - columnHeight / 2
+    val maxY = chatViewportHeight * 0.75f - columnHeight / 2
+    val yOffset = targetY.coerceIn(minY, maxY)
+    val jumpToStart = rememberHapticClick(UiHapticSignal.Selection) {
+        coroutineScope.launch {
+            listState.animateScrollToItem(0)
+        }
+    }
+    val jumpToEnd = rememberHapticClick(UiHapticSignal.Selection) {
+        coroutineScope.launch {
+            listState.animateScrollToItem(messages.lastIndex)
+        }
+    }
+
+    Box(
+        modifier = modifier,
+        contentAlignment = if (placement.alignStart) Alignment.TopStart else Alignment.TopEnd
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 10.dp)
+                .offset(y = yOffset),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            SmallFloatingActionButton(
+                onClick = jumpToStart,
+                modifier = Modifier.size(40.dp),
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ) {
+                Icon(
+                    Icons.Filled.ArrowUpward,
+                    contentDescription = "К началу чата"
+                )
+            }
+            SmallFloatingActionButton(
+                onClick = jumpToEnd,
+                modifier = Modifier.size(40.dp),
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ) {
+                Icon(
+                    Icons.Filled.ArrowDownward,
+                    contentDescription = "К концу чата"
+                )
+            }
+        }
     }
 }
 
