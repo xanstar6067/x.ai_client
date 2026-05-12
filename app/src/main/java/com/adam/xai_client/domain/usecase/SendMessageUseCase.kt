@@ -11,6 +11,7 @@ import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.MessageAttachment
 import com.adam.xai_client.domain.model.MessageAttachmentKind
 import com.adam.xai_client.domain.model.MessageRole
+import com.adam.xai_client.domain.token.TokenCounter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
 import java.io.File
@@ -21,7 +22,8 @@ class SendMessageUseCase(
     private val roleRepository: RoleRepository,
     private val settingsRepository: SettingsRepository,
     private val apiClient: XaiApiClient,
-    private val generateChatTitleUseCase: GenerateChatTitleUseCase
+    private val generateChatTitleUseCase: GenerateChatTitleUseCase,
+    private val tokenCounter: TokenCounter
 ) {
     suspend operator fun invoke(
         chatId: Long?,
@@ -78,6 +80,7 @@ class SendMessageUseCase(
                 role = MessageRole.USER,
                 content = text,
                 attachments = attachments,
+                tokenCount = tokenCounter.countMessage(text),
                 parentMessageId = userParentMessageId,
                 now = now
             )
@@ -128,7 +131,6 @@ class SendMessageUseCase(
 
         val assistantReply = StringBuilder()
         val reasoningContent = StringBuilder()
-        var responseTokenCount: Int? = null
         try {
             apiClient.streamChatRequest(
                 apiKey = settings.apiKey,
@@ -145,7 +147,6 @@ class SendMessageUseCase(
                     reasoningContent.append(delta.reasoningContent)
                 }
                 delta.tokenUsage?.let { usage ->
-                    responseTokenCount = usage.totalTokens.takeIf { it > 0 }
                     chatRepository.updateTokenUsage(targetChatId, usage)
                 }
                 if (delta.content.isNotEmpty() || delta.reasoningContent.isNotEmpty()) {
@@ -186,7 +187,7 @@ class SendMessageUseCase(
             messageId = assistantMessageId,
             content = finalReply,
             reasoningContent = finalReasoning.ifBlank { null },
-            tokenCount = responseTokenCount
+            tokenCount = tokenCounter.countMessage(finalReply, finalReasoning)
         )
         chatRepository.touchChat(targetChatId)
         if (isFirstUserMessage && text.isNotBlank()) {

@@ -91,6 +91,7 @@ class AppContainer(context: Context) {
         roleRepository = roleRepository,
         settingsRepository = settingsRepository,
         apiClient = apiClient,
-        generateChatTitleUseCase = generateChatTitleUseCase
+        generateChatTitleUseCase = generateChatTitleUseCase,
+        tokenCounter = tokenCounter
     )
 }

@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
@@ -67,7 +68,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.ChatModelSettings
@@ -124,6 +124,8 @@ fun ChatScreen(
     val hapticBack = rememberHapticClick(onBack)
     val hapticModelInfoOpen = rememberHapticClick { onModelInfoOpenChange(true) }
     val hapticModelSettingsOpen = rememberHapticClick { onModelSettingsOpenChange(true) }
+    var isTokenInfoOpen by remember { mutableStateOf(false) }
+    val hapticTokenInfoOpen = rememberHapticClick { isTokenInfoOpen = true }
     var pendingAttachmentKind by remember { mutableStateOf(MessageAttachmentKind.IMAGE) }
     val attachmentPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -164,27 +166,11 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = if (state.chatId == null) "Новый чат" else "Чат",
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        TokenSummaryInline(
-                            chatTokenCount = state.chatTokenCount,
-                            cachedTokenCount = state.cachedTokenCount,
-                            lastPromptTokenCount = state.lastPromptTokenCount,
-                            lastCompletionTokenCount = state.lastCompletionTokenCount,
-                            lastCachedTokenCount = state.lastCachedTokenCount,
-                            lastReasoningTokenCount = state.lastReasoningTokenCount,
-                            inputTokenCount = state.inputTokenCount
-                        )
-                    }
+                    Text(
+                        text = if (state.chatId == null) "Новый чат" else "Чат",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = hapticBack) {
@@ -192,6 +178,11 @@ fun ChatScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = hapticTokenInfoOpen
+                    ) {
+                        Icon(Icons.Filled.AttachMoney, contentDescription = "Счетчики токенов")
+                    }
                     IconButton(
                         onClick = hapticModelInfoOpen,
                         enabled = state.selectedModelId != null
@@ -306,6 +297,19 @@ fun ChatScreen(
         )
     }
 
+    if (isTokenInfoOpen) {
+        TokenInfoDialog(
+            chatTokenCount = state.chatTokenCount,
+            cachedTokenCount = state.cachedTokenCount,
+            lastPromptTokenCount = state.lastPromptTokenCount,
+            lastCompletionTokenCount = state.lastCompletionTokenCount,
+            lastCachedTokenCount = state.lastCachedTokenCount,
+            lastReasoningTokenCount = state.lastReasoningTokenCount,
+            inputTokenCount = state.inputTokenCount,
+            onDismiss = { isTokenInfoOpen = false }
+        )
+    }
+
     if (state.isModelSettingsOpen) {
         ModelSettingsDialog(
             modelId = state.selectedModelId,
@@ -325,47 +329,40 @@ fun ChatScreen(
 }
 
 @Composable
-private fun TokenSummaryInline(
+private fun TokenInfoDialog(
     chatTokenCount: Int,
     cachedTokenCount: Int,
     lastPromptTokenCount: Int,
     lastCompletionTokenCount: Int,
     lastCachedTokenCount: Int,
     lastReasoningTokenCount: Int,
-    inputTokenCount: Int
+    inputTokenCount: Int,
+    onDismiss: () -> Unit
 ) {
-    val cachedText = if (cachedTokenCount > 0) " | Кэш $cachedTokenCount" else ""
-    val lastUsageText = buildString {
-        append("Запрос: кэш ")
-        append(lastCachedTokenCount)
-        append(" / вход ")
-        append(lastPromptTokenCount)
-        append(" | ответ ")
-        append(lastCompletionTokenCount)
-        if (lastReasoningTokenCount > 0) {
-            append(" | разм. ")
-            append(lastReasoningTokenCount)
+    val hapticDismiss = rememberHapticClick(onDismiss)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Счетчики") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LimitRow("Ввод", "$inputTokenCount токенов")
+                LimitRow("Всего", "${chatTokenCount + inputTokenCount} токенов")
+                LimitRow("Кэш", "$cachedTokenCount токенов")
+                HorizontalDivider()
+                LimitRow("Последний запрос: кэш", "$lastCachedTokenCount токенов")
+                LimitRow("Последний запрос: вход", "$lastPromptTokenCount токенов")
+                LimitRow("Последний ответ", "$lastCompletionTokenCount токенов")
+                if (lastReasoningTokenCount > 0) {
+                    LimitRow("Последнее рассуждение", "$lastReasoningTokenCount токенов")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = hapticDismiss) {
+                Text("ОК")
+            }
         }
-    }
-    Column(
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy((-2).dp)
-    ) {
-        Text(
-            text = "Ввод $inputTokenCount | Всего ${chatTokenCount + inputTokenCount}$cachedText",
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 11.sp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = lastUsageText,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 11.sp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
+    )
 }
 
 @Composable

@@ -130,7 +130,9 @@ class ChatViewModel(
                     _uiState.update {
                         it.copy(
                             messages = messages,
-                            chatTokenCount = messages.sumOf { message -> message.tokenCount }
+                            chatTokenCount = messages.sumOf { message ->
+                                tokenCounter.countMessage(message.content, message.reasoningContent)
+                            }
                         )
                     }
                 }
