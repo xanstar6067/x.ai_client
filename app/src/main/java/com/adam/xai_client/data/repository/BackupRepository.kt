@@ -468,7 +468,7 @@ data class BackupImportSummary(
 
 @Serializable
 private data class ChatBackupDto(
-    val schemaVersion: Int = 5,
+    val schemaVersion: Int = 6,
     val exportedAt: Long,
     val chats: List<BackupChatDto>,
     val messages: List<BackupMessageDto>,
@@ -498,7 +498,11 @@ private data class BackupChatDto(
     val updatedAt: Long,
     val selectedModelId: String?,
     val selectedRoleId: Long?,
-    val cachedTokenCount: Int = 0
+    val cachedTokenCount: Int = 0,
+    val lastPromptTokenCount: Int = 0,
+    val lastCompletionTokenCount: Int = 0,
+    val lastCachedTokenCount: Int = 0,
+    val lastReasoningTokenCount: Int = 0
 )
 
 @Serializable
@@ -601,7 +605,11 @@ private fun ChatEntity.toBackup(): BackupChatDto = BackupChatDto(
     updatedAt = updatedAt,
     selectedModelId = selectedModelId,
     selectedRoleId = selectedRoleId,
-    cachedTokenCount = cachedTokenCount
+    cachedTokenCount = cachedTokenCount,
+    lastPromptTokenCount = lastPromptTokenCount,
+    lastCompletionTokenCount = lastCompletionTokenCount,
+    lastCachedTokenCount = lastCachedTokenCount,
+    lastReasoningTokenCount = lastReasoningTokenCount
 )
 
 private fun BackupChatDto.toEntity(): ChatEntity = ChatEntity(
@@ -611,7 +619,11 @@ private fun BackupChatDto.toEntity(): ChatEntity = ChatEntity(
     updatedAt = updatedAt,
     selectedModelId = selectedModelId,
     selectedRoleId = selectedRoleId,
-    cachedTokenCount = cachedTokenCount
+    cachedTokenCount = cachedTokenCount,
+    lastPromptTokenCount = lastPromptTokenCount,
+    lastCompletionTokenCount = lastCompletionTokenCount,
+    lastCachedTokenCount = lastCachedTokenCount,
+    lastReasoningTokenCount = lastReasoningTokenCount
 )
 
 private fun MessageEntity.toBackup(mediaEntries: MutableList<BackupMediaEntry>): BackupMessageDto {

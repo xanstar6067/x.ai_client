@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 data class ApiChatMessage(
     val role: String,
     val content: String,
+    val reasoningContent: String? = null,
     val attachments: List<ApiMessageAttachment> = emptyList()
 )
 

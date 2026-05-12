@@ -67,6 +67,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.ChatModelSettings
@@ -177,6 +178,10 @@ fun ChatScreen(
                         TokenSummaryInline(
                             chatTokenCount = state.chatTokenCount,
                             cachedTokenCount = state.cachedTokenCount,
+                            lastPromptTokenCount = state.lastPromptTokenCount,
+                            lastCompletionTokenCount = state.lastCompletionTokenCount,
+                            lastCachedTokenCount = state.lastCachedTokenCount,
+                            lastReasoningTokenCount = state.lastReasoningTokenCount,
                             inputTokenCount = state.inputTokenCount
                         )
                     }
@@ -323,16 +328,44 @@ fun ChatScreen(
 private fun TokenSummaryInline(
     chatTokenCount: Int,
     cachedTokenCount: Int,
+    lastPromptTokenCount: Int,
+    lastCompletionTokenCount: Int,
+    lastCachedTokenCount: Int,
+    lastReasoningTokenCount: Int,
     inputTokenCount: Int
 ) {
     val cachedText = if (cachedTokenCount > 0) " | Кэш $cachedTokenCount" else ""
-    Text(
-        text = "Ввод $inputTokenCount | Всего ${chatTokenCount + inputTokenCount}$cachedText",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis
-    )
+    val lastUsageText = buildString {
+        append("Запрос: кэш ")
+        append(lastCachedTokenCount)
+        append(" / вход ")
+        append(lastPromptTokenCount)
+        append(" | ответ ")
+        append(lastCompletionTokenCount)
+        if (lastReasoningTokenCount > 0) {
+            append(" | разм. ")
+            append(lastReasoningTokenCount)
+        }
+    }
+    Column(
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy((-2).dp)
+    ) {
+        Text(
+            text = "Ввод $inputTokenCount | Всего ${chatTokenCount + inputTokenCount}$cachedText",
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 11.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = lastUsageText,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 11.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 @Composable

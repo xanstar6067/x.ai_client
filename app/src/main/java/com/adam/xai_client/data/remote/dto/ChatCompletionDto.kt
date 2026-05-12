@@ -77,7 +77,9 @@ data class StreamOptionsDto(
 @Serializable
 data class ApiRequestMessageDto(
     val role: String,
-    val content: JsonElement
+    val content: JsonElement,
+    @SerialName("reasoning_content")
+    val reasoningContent: String? = null
 )
 
 fun chatCompletionRequestDto(
@@ -121,7 +123,11 @@ fun responsesRequestDto(
 private fun ApiChatMessage.toChatCompletionsMessage(): ApiRequestMessageDto {
     val imageAttachments = attachments.filter { it.kind == ApiMessageAttachmentKind.IMAGE }
     if (imageAttachments.isEmpty()) {
-        return ApiRequestMessageDto(role = role, content = JsonPrimitive(content))
+        return ApiRequestMessageDto(
+            role = role,
+            content = JsonPrimitive(content),
+            reasoningContent = reasoningContent?.takeIf { it.isNotBlank() }
+        )
     }
     val blocks = buildList {
         imageAttachments.mapNotNull { it.dataUrl }.forEach { dataUrl ->
@@ -147,7 +153,11 @@ private fun ApiChatMessage.toChatCompletionsMessage(): ApiRequestMessageDto {
             )
         }
     }
-    return ApiRequestMessageDto(role = role, content = JsonArray(blocks))
+    return ApiRequestMessageDto(
+        role = role,
+        content = JsonArray(blocks),
+        reasoningContent = reasoningContent?.takeIf { it.isNotBlank() }
+    )
 }
 
 private fun ApiChatMessage.toResponsesMessage(): ApiRequestMessageDto {

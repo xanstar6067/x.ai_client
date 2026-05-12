@@ -106,6 +106,9 @@ class SendMessageUseCase(
                         ApiChatMessage(
                             role = message.role.apiName,
                             content = message.content,
+                            reasoningContent = message.reasoningContent.takeIf {
+                                message.role == MessageRole.ASSISTANT
+                            },
                             attachments = message.attachments.toApiAttachments(
                                 apiKey = settings.apiKey,
                                 baseUrl = settings.baseUrl
@@ -143,7 +146,7 @@ class SendMessageUseCase(
                 }
                 delta.tokenUsage?.let { usage ->
                     responseTokenCount = usage.totalTokens.takeIf { it > 0 }
-                    chatRepository.addCachedTokens(targetChatId, usage.cachedTokens)
+                    chatRepository.updateTokenUsage(targetChatId, usage)
                 }
                 if (delta.content.isNotEmpty() || delta.reasoningContent.isNotEmpty()) {
                     chatRepository.updateMessageContent(

@@ -27,7 +27,11 @@ internal fun ChatEntity.asDomain(): Chat = Chat(
     updatedAt = updatedAt,
     selectedModelId = selectedModelId,
     selectedRoleId = selectedRoleId,
-    cachedTokenCount = cachedTokenCount
+    cachedTokenCount = cachedTokenCount,
+    lastPromptTokenCount = lastPromptTokenCount,
+    lastCompletionTokenCount = lastCompletionTokenCount,
+    lastCachedTokenCount = lastCachedTokenCount,
+    lastReasoningTokenCount = lastReasoningTokenCount
 )
 
 internal fun MessageEntity.asDomain(): Message = Message(

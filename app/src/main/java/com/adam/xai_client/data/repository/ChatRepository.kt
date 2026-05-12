@@ -1,6 +1,7 @@
 package com.adam.xai_client.data.repository
 
 import androidx.room.withTransaction
+import com.adam.xai_client.data.remote.api.TokenUsage
 import com.adam.xai_client.data.local.database.AppDatabase
 import com.adam.xai_client.data.local.entity.ChatEntity
 import com.adam.xai_client.data.local.entity.MessageEntity
@@ -237,9 +238,14 @@ class ChatRepository(
         chatDao.updateChat(current.copy(updatedAt = updatedAt))
     }
 
-    suspend fun addCachedTokens(chatId: Long, cachedTokens: Int) {
-        if (cachedTokens <= 0) return
-        chatDao.addCachedTokens(chatId, cachedTokens)
+    suspend fun updateTokenUsage(chatId: Long, usage: TokenUsage) {
+        chatDao.updateTokenUsage(
+            chatId = chatId,
+            promptTokens = usage.promptTokens,
+            completionTokens = usage.completionTokens,
+            cachedTokens = usage.cachedTokens,
+            reasoningTokens = usage.reasoningTokens
+        )
     }
 
     suspend fun updateChatTitle(
@@ -266,7 +272,11 @@ class ChatRepository(
                     title = chat.title.asCopyTitle(),
                     createdAt = now,
                     updatedAt = now,
-                    cachedTokenCount = 0
+                    cachedTokenCount = 0,
+                    lastPromptTokenCount = 0,
+                    lastCompletionTokenCount = 0,
+                    lastCachedTokenCount = 0,
+                    lastReasoningTokenCount = 0
                 )
             )
 

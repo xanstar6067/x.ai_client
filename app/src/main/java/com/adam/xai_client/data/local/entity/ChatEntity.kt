@@ -12,5 +12,9 @@ data class ChatEntity(
     val updatedAt: Long,
     val selectedModelId: String?,
     val selectedRoleId: Long?,
-    val cachedTokenCount: Int = 0
+    val cachedTokenCount: Int = 0,
+    val lastPromptTokenCount: Int = 0,
+    val lastCompletionTokenCount: Int = 0,
+    val lastCachedTokenCount: Int = 0,
+    val lastReasoningTokenCount: Int = 0
 )

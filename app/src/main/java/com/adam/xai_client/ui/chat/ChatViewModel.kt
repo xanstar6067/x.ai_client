@@ -54,6 +54,10 @@ data class ChatUiState(
     val supportsDocumentAttachments: Boolean = false,
     val chatTokenCount: Int = 0,
     val cachedTokenCount: Int = 0,
+    val lastPromptTokenCount: Int = 0,
+    val lastCompletionTokenCount: Int = 0,
+    val lastCachedTokenCount: Int = 0,
+    val lastReasoningTokenCount: Int = 0,
     val inputTokenCount: Int = 0,
     val availableModels: List<AiModel> = emptyList(),
     val availableRoles: List<ModelRole> = emptyList(),
@@ -108,7 +112,11 @@ class ChatViewModel(
                                 chatId = chat.id,
                                 selectedModelId = chat.selectedModelId ?: it.selectedModelId,
                                 selectedRoleId = chat.selectedRoleId ?: it.selectedRoleId,
-                                cachedTokenCount = chat.cachedTokenCount
+                                cachedTokenCount = chat.cachedTokenCount,
+                                lastPromptTokenCount = chat.lastPromptTokenCount,
+                                lastCompletionTokenCount = chat.lastCompletionTokenCount,
+                                lastCachedTokenCount = chat.lastCachedTokenCount,
+                                lastReasoningTokenCount = chat.lastReasoningTokenCount
                             )
                         }
                         updateAvailableModels(chat.selectedModelId)
