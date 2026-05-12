@@ -8,8 +8,14 @@ data class Chat(
     val selectedModelId: String?,
     val selectedRoleId: Long?,
     val cachedTokenCount: Int = 0,
+    val totalPromptTokenCount: Int = 0,
+    val totalCompletionTokenCount: Int = 0,
+    val totalImageTokenCount: Int = 0,
+    val totalReasoningTokenCount: Int = 0,
     val lastPromptTokenCount: Int = 0,
     val lastCompletionTokenCount: Int = 0,
     val lastCachedTokenCount: Int = 0,
-    val lastReasoningTokenCount: Int = 0
+    val lastReasoningTokenCount: Int = 0,
+    val accumulatedCostMicros: Long = 0,
+    val lastRequestCostMicros: Long = 0
 )

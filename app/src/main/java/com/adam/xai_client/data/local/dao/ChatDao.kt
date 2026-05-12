@@ -36,10 +36,16 @@ interface ChatDao {
         """
         UPDATE chats
         SET cachedTokenCount = cachedTokenCount + :cachedTokens,
+            totalPromptTokenCount = totalPromptTokenCount + :promptTokens,
+            totalCompletionTokenCount = totalCompletionTokenCount + :completionTokens,
+            totalImageTokenCount = totalImageTokenCount + :imageTokens,
+            totalReasoningTokenCount = totalReasoningTokenCount + :reasoningTokens,
             lastPromptTokenCount = :promptTokens,
             lastCompletionTokenCount = :completionTokens,
             lastCachedTokenCount = :cachedTokens,
-            lastReasoningTokenCount = :reasoningTokens
+            lastReasoningTokenCount = :reasoningTokens,
+            accumulatedCostMicros = accumulatedCostMicros + :costMicros,
+            lastRequestCostMicros = :costMicros
         WHERE id = :chatId
         """
     )
@@ -48,7 +54,9 @@ interface ChatDao {
         promptTokens: Int,
         completionTokens: Int,
         cachedTokens: Int,
-        reasoningTokens: Int
+        reasoningTokens: Int,
+        imageTokens: Int,
+        costMicros: Long
     )
 
     @Delete

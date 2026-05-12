@@ -57,6 +57,25 @@ class ModelRepository(
         aiModelDao.setEnabled(modelId = modelId, enabled = enabled)
     }
 
+    suspend fun updateTokenPrices(
+        modelId: String,
+        promptTextTokenPrice: Int?,
+        cachedPromptTextTokenPrice: Int?,
+        completionTextTokenPrice: Int?
+    ) {
+        val existing = aiModelDao.getModel(modelId) ?: return
+        aiModelDao.upsertModels(
+            listOf(
+                existing.copy(
+                    promptTextTokenPrice = promptTextTokenPrice,
+                    cachedPromptTextTokenPrice = cachedPromptTextTokenPrice,
+                    completionTextTokenPrice = completionTextTokenPrice,
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        )
+    }
+
     suspend fun getModel(modelId: String): AiModel? {
         return aiModelDao.getModel(modelId)?.asDomain()
     }

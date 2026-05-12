@@ -22,9 +22,11 @@ import com.adam.xai_client.domain.model.ModelLimits
 import com.adam.xai_client.domain.model.ModelRole
 import com.adam.xai_client.domain.model.ReasoningEffort
 import com.adam.xai_client.domain.model.XaiModelLimits
+import com.adam.xai_client.domain.model.estimatedPromptCostMicros
 import com.adam.xai_client.domain.model.isTextChatModel
 import com.adam.xai_client.domain.model.supportsFileAttachments
 import com.adam.xai_client.domain.model.supportsImageInput
+import com.adam.xai_client.domain.model.withKnownTokenPricingFallback
 import com.adam.xai_client.domain.token.TokenCounter
 import com.adam.xai_client.domain.usecase.MessageSendFailedException
 import com.adam.xai_client.domain.usecase.SendMessageUseCase
@@ -54,10 +56,18 @@ data class ChatUiState(
     val supportsDocumentAttachments: Boolean = false,
     val chatTokenCount: Int = 0,
     val cachedTokenCount: Int = 0,
+    val totalPromptTokenCount: Int = 0,
+    val totalCompletionTokenCount: Int = 0,
+    val totalImageTokenCount: Int = 0,
+    val totalReasoningTokenCount: Int = 0,
     val lastPromptTokenCount: Int = 0,
     val lastCompletionTokenCount: Int = 0,
     val lastCachedTokenCount: Int = 0,
     val lastReasoningTokenCount: Int = 0,
+    val accumulatedCostMicros: Long = 0,
+    val lastRequestCostMicros: Long = 0,
+    val nextPromptCostMicros: Long = 0,
+    val hasSelectedModelPromptPrice: Boolean = false,
     val inputTokenCount: Int = 0,
     val availableModels: List<AiModel> = emptyList(),
     val availableRoles: List<ModelRole> = emptyList(),
@@ -113,11 +123,17 @@ class ChatViewModel(
                                 selectedModelId = chat.selectedModelId ?: it.selectedModelId,
                                 selectedRoleId = chat.selectedRoleId ?: it.selectedRoleId,
                                 cachedTokenCount = chat.cachedTokenCount,
+                                totalPromptTokenCount = chat.totalPromptTokenCount,
+                                totalCompletionTokenCount = chat.totalCompletionTokenCount,
+                                totalImageTokenCount = chat.totalImageTokenCount,
+                                totalReasoningTokenCount = chat.totalReasoningTokenCount,
                                 lastPromptTokenCount = chat.lastPromptTokenCount,
                                 lastCompletionTokenCount = chat.lastCompletionTokenCount,
                                 lastCachedTokenCount = chat.lastCachedTokenCount,
-                                lastReasoningTokenCount = chat.lastReasoningTokenCount
-                            )
+                                lastReasoningTokenCount = chat.lastReasoningTokenCount,
+                                accumulatedCostMicros = chat.accumulatedCostMicros,
+                                lastRequestCostMicros = chat.lastRequestCostMicros
+                            ).withEstimatedNextPromptCost()
                         }
                         updateAvailableModels(chat.selectedModelId)
                     }
@@ -139,7 +155,7 @@ class ChatViewModel(
                         it.copy(
                             messages = messagesWithTokenCounts,
                             chatTokenCount = messagesWithTokenCounts.sumOf { message -> message.tokenCount }
-                        )
+                        ).withEstimatedNextPromptCost()
                     }
                 }
         }
@@ -149,7 +165,7 @@ class ChatViewModel(
                 .collect { settings ->
                     _uiState.update { state ->
                         val normalized = settings.normalizedForModel(state.selectedModelId)
-                        state.copy(modelSettings = normalized)
+                        state.copy(modelSettings = normalized).withEstimatedNextPromptCost()
                     }
                 }
         }
@@ -167,7 +183,7 @@ class ChatViewModel(
                         supportsImageAttachments = supportsImageAttachments(selectedModelId),
                         supportsDocumentAttachments = supportsDocumentAttachments(selectedModelId),
                         modelSettings = it.modelSettings.normalizedForModel(selectedModelId)
-                    )
+                    ).withEstimatedNextPromptCost()
                 }
                 updateAvailableModels(selectedModelId)
             }
@@ -201,7 +217,7 @@ class ChatViewModel(
                 inputText = value,
                 inputTokenCount = tokenCounter.count(value),
                 error = null
-            )
+            ).withEstimatedNextPromptCost()
         }
     }
 
@@ -246,7 +262,7 @@ class ChatViewModel(
                 supportsDocumentAttachments = supportsDocumentAttachments(modelId),
                 modelSettings = it.modelSettings.normalizedForModel(modelId),
                 error = null
-            )
+            ).withEstimatedNextPromptCost()
         }
         updateAvailableModels(modelId)
         viewModelScope.launch {
@@ -605,7 +621,7 @@ class ChatViewModel(
                 selectedModelLimits = limitsForModelId(effectiveSelectedModel?.id),
                 supportsImageAttachments = supportsImageAttachments(effectiveSelectedModel?.id),
                 supportsDocumentAttachments = supportsDocumentAttachments(effectiveSelectedModel?.id)
-            )
+            ).withEstimatedNextPromptCost()
         }
     }
 
@@ -616,7 +632,7 @@ class ChatViewModel(
                     .copy(chatId = state.chatId)
                     .normalizedForModel(state.selectedModelId),
                 error = null
-            )
+            ).withEstimatedNextPromptCost()
         }
         persistModelSettings()
     }
@@ -676,6 +692,22 @@ class ChatViewModel(
         val model = models.firstOrNull { it.id == this || this in it.aliases }
             ?: AiModel(id = this, name = this, isEnabledForChat = true)
         return model.isTextChatModel()
+    }
+
+    private fun ChatUiState.withEstimatedNextPromptCost(): ChatUiState {
+        val model = selectedModelId?.let { selected ->
+            latestModels.firstOrNull { it.id == selected || selected in it.aliases }
+                ?: AiModel(id = selected, name = selected, isEnabledForChat = true)
+        }?.withKnownTokenPricingFallback()
+        val contextTokens = modelSettings.contextMessageLimit
+            .takeIf { it > 0 }
+            ?.let { limit -> messages.takeLast(limit).sumOf { it.tokenCount } }
+            ?: chatTokenCount
+        val promptTokens = (contextTokens + inputTokenCount).coerceAtLeast(0)
+        return copy(
+            nextPromptCostMicros = estimatedPromptCostMicros(promptTokens, model),
+            hasSelectedModelPromptPrice = model?.promptTextTokenPrice != null
+        )
     }
 
     companion object {

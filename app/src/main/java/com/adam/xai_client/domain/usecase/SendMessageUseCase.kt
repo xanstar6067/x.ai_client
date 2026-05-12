@@ -5,13 +5,17 @@ import com.adam.xai_client.data.remote.dto.ApiChatMessage
 import com.adam.xai_client.data.remote.dto.ApiMessageAttachment
 import com.adam.xai_client.data.remote.dto.ApiMessageAttachmentKind
 import com.adam.xai_client.data.repository.ChatRepository
+import com.adam.xai_client.data.repository.ModelRepository
 import com.adam.xai_client.data.repository.RoleRepository
 import com.adam.xai_client.data.repository.SettingsRepository
 import com.adam.xai_client.domain.model.ChatModelSettings
+import com.adam.xai_client.domain.model.AiModel
 import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.MessageAttachment
 import com.adam.xai_client.domain.model.MessageAttachmentKind
 import com.adam.xai_client.domain.model.MessageRole
+import com.adam.xai_client.domain.model.estimatedTokenUsageCostMicros
+import com.adam.xai_client.domain.model.withKnownTokenPricingFallback
 import com.adam.xai_client.domain.token.TokenCounter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
@@ -23,6 +27,7 @@ class SendMessageUseCase(
     private val roleRepository: RoleRepository,
     private val settingsRepository: SettingsRepository,
     private val apiClient: XaiApiClient,
+    private val modelRepository: ModelRepository,
     private val generateChatTitleUseCase: GenerateChatTitleUseCase,
     private val tokenCounter: TokenCounter
 ) {
@@ -91,6 +96,8 @@ class SendMessageUseCase(
         onChatReady(targetChatId)
         settingsRepository.setLastSelectedModelId(modelId)
         settingsRepository.setLastSelectedRoleId(effectiveRoleId)
+        val selectedModel = (modelRepository.getModel(modelId) ?: AiModel(id = modelId))
+            .withKnownTokenPricingFallback()
 
         val history = userMessageId?.let { chatRepository.getMessageLineage(targetChatId, it) }
             ?: chatRepository.getMessages(targetChatId)
@@ -160,7 +167,14 @@ class SendMessageUseCase(
                 val responseId = delta.responseId?.takeIf { it.isNotBlank() }
                     ?.also { assistantResponseId = it }
                 delta.tokenUsage?.takeUnless { tokenUsageApplied }?.let { usage ->
-                    chatRepository.updateTokenUsage(targetChatId, usage)
+                    val costMicros = estimatedTokenUsageCostMicros(
+                        promptTokens = usage.promptTokens,
+                        completionTokens = usage.completionTokens,
+                        cachedTokens = usage.cachedTokens,
+                        imageTokens = usage.imageTokens,
+                        model = selectedModel
+                    )
+                    chatRepository.updateTokenUsage(targetChatId, usage, costMicros)
                     tokenUsageApplied = true
                 }
                 if (delta.content.isNotEmpty() || delta.reasoningContent.isNotEmpty()) {

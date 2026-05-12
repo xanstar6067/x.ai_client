@@ -244,13 +244,19 @@ class ChatRepository(
         chatDao.updateChat(current.copy(updatedAt = updatedAt))
     }
 
-    suspend fun updateTokenUsage(chatId: Long, usage: TokenUsage) {
+    suspend fun updateTokenUsage(
+        chatId: Long,
+        usage: TokenUsage,
+        costMicros: Long
+    ) {
         chatDao.updateTokenUsage(
             chatId = chatId,
             promptTokens = usage.promptTokens,
             completionTokens = usage.completionTokens,
             cachedTokens = usage.cachedTokens,
-            reasoningTokens = usage.reasoningTokens
+            reasoningTokens = usage.reasoningTokens,
+            imageTokens = usage.imageTokens,
+            costMicros = costMicros
         )
     }
 
@@ -279,10 +285,16 @@ class ChatRepository(
                     createdAt = now,
                     updatedAt = now,
                     cachedTokenCount = 0,
+                    totalPromptTokenCount = 0,
+                    totalCompletionTokenCount = 0,
+                    totalImageTokenCount = 0,
+                    totalReasoningTokenCount = 0,
                     lastPromptTokenCount = 0,
                     lastCompletionTokenCount = 0,
                     lastCachedTokenCount = 0,
-                    lastReasoningTokenCount = 0
+                    lastReasoningTokenCount = 0,
+                    accumulatedCostMicros = 0,
+                    lastRequestCostMicros = 0
                 )
             )
 

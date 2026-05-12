@@ -40,7 +40,8 @@ class AppContainer(context: Context) {
         AppDatabase.MIGRATION_12_13,
         AppDatabase.MIGRATION_13_14,
         AppDatabase.MIGRATION_14_15,
-        AppDatabase.MIGRATION_15_16
+        AppDatabase.MIGRATION_15_16,
+        AppDatabase.MIGRATION_16_17
     ).build()
 
     val settingsRepository: SettingsRepository = SettingsRepository(
@@ -92,6 +93,7 @@ class AppContainer(context: Context) {
         roleRepository = roleRepository,
         settingsRepository = settingsRepository,
         apiClient = apiClient,
+        modelRepository = modelRepository,
         generateChatTitleUseCase = generateChatTitleUseCase,
         tokenCounter = tokenCounter
     )

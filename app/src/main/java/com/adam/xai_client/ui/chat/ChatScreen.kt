@@ -78,6 +78,7 @@ import com.adam.xai_client.domain.model.ModelLimits
 import com.adam.xai_client.domain.model.ModelRole
 import com.adam.xai_client.domain.model.ReasoningEffort
 import com.adam.xai_client.domain.model.XaiModelLimits
+import com.adam.xai_client.domain.model.toUsdCost
 import com.adam.xai_client.ui.components.DropdownSelector
 import com.adam.xai_client.ui.components.MessageBubble
 import com.adam.xai_client.ui.components.SafeSnackbarHost
@@ -305,6 +306,14 @@ fun ChatScreen(
             lastCompletionTokenCount = state.lastCompletionTokenCount,
             lastCachedTokenCount = state.lastCachedTokenCount,
             lastReasoningTokenCount = state.lastReasoningTokenCount,
+            totalPromptTokenCount = state.totalPromptTokenCount,
+            totalCompletionTokenCount = state.totalCompletionTokenCount,
+            totalImageTokenCount = state.totalImageTokenCount,
+            totalReasoningTokenCount = state.totalReasoningTokenCount,
+            accumulatedCostMicros = state.accumulatedCostMicros,
+            lastRequestCostMicros = state.lastRequestCostMicros,
+            nextPromptCostMicros = state.nextPromptCostMicros,
+            hasSelectedModelPromptPrice = state.hasSelectedModelPromptPrice,
             inputTokenCount = state.inputTokenCount,
             onDismiss = { isTokenInfoOpen = false }
         )
@@ -336,18 +345,55 @@ private fun TokenInfoDialog(
     lastCompletionTokenCount: Int,
     lastCachedTokenCount: Int,
     lastReasoningTokenCount: Int,
+    totalPromptTokenCount: Int,
+    totalCompletionTokenCount: Int,
+    totalImageTokenCount: Int,
+    totalReasoningTokenCount: Int,
+    accumulatedCostMicros: Long,
+    lastRequestCostMicros: Long,
+    nextPromptCostMicros: Long,
+    hasSelectedModelPromptPrice: Boolean,
     inputTokenCount: Int,
     onDismiss: () -> Unit
 ) {
     val hapticDismiss = rememberHapticClick(onDismiss)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Счетчики") },
+        title = { Text("Стоимость и токены") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                LimitRow("Накопленная стоимость", accumulatedCostMicros.toUsdCost())
+                LimitRow("Последний запрос", lastRequestCostMicros.toUsdCost())
+                LimitRow(
+                    "Следующая отправка",
+                    if (hasSelectedModelPromptPrice) {
+                        "${nextPromptCostMicros.toUsdCost()} за вход"
+                    } else {
+                        "цена ввода не задана"
+                    }
+                )
+                Text(
+                    text = "Оценка следующей отправки считает только входной контекст. Итоговая стоимость ответа появится после usage от API.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                HorizontalDivider()
                 LimitRow("Ввод", "$inputTokenCount токенов")
                 LimitRow("Всего", "${chatTokenCount + inputTokenCount} токенов")
                 LimitRow("Кэш", "$cachedTokenCount токенов")
+                if (totalPromptTokenCount > 0 || totalCompletionTokenCount > 0) {
+                    LimitRow("API вход всего", "$totalPromptTokenCount токенов")
+                    LimitRow("API вывод всего", "$totalCompletionTokenCount токенов")
+                }
+                if (totalImageTokenCount > 0) {
+                    LimitRow("Image-токены всего", "$totalImageTokenCount токенов")
+                }
+                if (totalReasoningTokenCount > 0) {
+                    LimitRow("Рассуждение всего", "$totalReasoningTokenCount токенов")
+                }
                 HorizontalDivider()
                 LimitRow("Последний запрос: кэш", "$lastCachedTokenCount токенов")
                 LimitRow("Последний запрос: вход", "$lastPromptTokenCount токенов")
@@ -355,6 +401,11 @@ private fun TokenInfoDialog(
                 if (lastReasoningTokenCount > 0) {
                     LimitRow("Последнее рассуждение", "$lastReasoningTokenCount токенов")
                 }
+                Text(
+                    text = "«Всего» — локальная оценка текста в активной ветке чата. «Последний запрос: вход» — фактический prompt/input_tokens, который вернул API для последней отправки.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         },
         confirmButton = {

@@ -21,6 +21,8 @@ import com.adam.xai_client.ui.images.ImageGenerationScreen
 import com.adam.xai_client.ui.images.ImageGenerationViewModel
 import com.adam.xai_client.ui.models.ModelsScreen
 import com.adam.xai_client.ui.models.ModelsViewModel
+import com.adam.xai_client.ui.pricing.PricingScreen
+import com.adam.xai_client.ui.pricing.PricingViewModel
 import com.adam.xai_client.ui.roles.RolesScreen
 import com.adam.xai_client.ui.roles.RolesViewModel
 import com.adam.xai_client.ui.settings.SettingsScreen
@@ -150,6 +152,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 onUiHapticsChange = viewModel::onUiHapticsChange,
                 onNamingModelSelected = viewModel::onNamingModelSelected,
                 onOpenModels = { navController.navigate(Screen.Models.route) },
+                onOpenPricing = { navController.navigate(Screen.Pricing.route) },
                 onSave = viewModel::save,
                 onCheckConnection = viewModel::checkConnection,
                 onBack = { navController.popBackStack() },
@@ -166,6 +169,21 @@ fun XaiChatNavHost(container: AppContainer) {
                 state = state,
                 onRefresh = viewModel::refreshModels,
                 onToggleModel = viewModel::setModelEnabled,
+                onBack = { navController.popBackStack() },
+                onMessageShown = viewModel::clearTransientMessages
+            )
+        }
+
+        composable(Screen.Pricing.route) {
+            val viewModel: PricingViewModel = viewModel(
+                factory = PricingViewModel.factory(container)
+            )
+            val state = viewModel.uiState.collectAsStateWithLifecycle().value
+            PricingScreen(
+                state = state,
+                onAutofill = viewModel::autofillKnownPrices,
+                onPriceChange = viewModel::updatePrice,
+                onSave = viewModel::save,
                 onBack = { navController.popBackStack() },
                 onMessageShown = viewModel::clearTransientMessages
             )
@@ -280,6 +298,7 @@ private sealed class Screen(val route: String) {
     data object NewChat : Screen("chat/new")
     data object Settings : Screen("settings")
     data object Models : Screen("models")
+    data object Pricing : Screen("pricing")
     data object Roles : Screen("roles")
     data object Images : Screen("images")
     data object Videos : Screen("videos")
