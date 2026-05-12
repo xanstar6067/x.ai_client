@@ -14,6 +14,7 @@ navigation = "2.9.7"
 composeBom = "2026.02.01"
 room = "2.8.4"
 jtokkit = "1.1.0"
+markwon = "4.6.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -43,6 +44,10 @@ ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref =
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
 ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
 jtokkit = { group = "com.knuddels", name = "jtokkit", version.ref = "jtokkit" }
+markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
+markwon-ext-strikethrough = { group = "io.noties.markwon", name = "ext-strikethrough", version.ref = "markwon" }
+markwon-ext-tables = { group = "io.noties.markwon", name = "ext-tables", version.ref = "markwon" }
+markwon-linkify = { group = "io.noties.markwon", name = "linkify", version.ref = "markwon" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
