@@ -16,6 +16,7 @@ import com.adam.xai_client.data.remote.dto.ImageResponseDto
 import com.adam.xai_client.data.remote.dto.LanguageModelsResponseDto
 import com.adam.xai_client.data.remote.dto.ModelsResponseDto
 import com.adam.xai_client.data.remote.dto.ResponsesResponseDto
+import com.adam.xai_client.data.remote.dto.ResponsesRequestDto
 import com.adam.xai_client.data.remote.dto.ResponsesStreamEventDto
 import com.adam.xai_client.data.remote.dto.UploadedFileDto
 import com.adam.xai_client.data.remote.dto.VideoGenerationRequestDto
@@ -62,6 +63,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -423,21 +425,20 @@ class KtorXaiApiClient(
         promptCacheKey: String?,
         previousResponseId: String?
     ): String {
+        val request = responsesRequestDto(
+            model = modelId,
+            messages = messages,
+            stream = false,
+            settings = modelSettings.forResponsesApi(modelId),
+            promptCacheKey = promptCacheKey,
+            previousResponseId = previousResponseId
+        )
         val response = httpClient.post(endpoint(baseUrl, "/responses")) {
             bearerAuth(apiKey)
             contentType(ContentType.Application.Json)
-            setBody(
-                responsesRequestDto(
-                    model = modelId,
-                    messages = messages,
-                    stream = false,
-                    settings = modelSettings.forResponsesApi(modelId),
-                    promptCacheKey = promptCacheKey,
-                    previousResponseId = previousResponseId
-                )
-            )
+            setBody(request)
         }
-        response.ensureSuccess()
+        response.ensureSuccess(request.debugShape())
         return response.body<ResponsesResponseDto>().outputTextContent()
     }
 
@@ -495,21 +496,20 @@ class KtorXaiApiClient(
         promptCacheKey: String?,
         previousResponseId: String?
     ): Flow<ChatStreamDelta> = flow {
+        val request = responsesRequestDto(
+            model = modelId,
+            messages = messages,
+            stream = true,
+            settings = modelSettings.forResponsesApi(modelId),
+            promptCacheKey = promptCacheKey,
+            previousResponseId = previousResponseId
+        )
         val response = httpClient.post(endpoint(baseUrl, "/responses")) {
             bearerAuth(apiKey)
             contentType(ContentType.Application.Json)
-            setBody(
-                responsesRequestDto(
-                    model = modelId,
-                    messages = messages,
-                    stream = true,
-                    settings = modelSettings.forResponsesApi(modelId),
-                    promptCacheKey = promptCacheKey,
-                    previousResponseId = previousResponseId
-                )
-            )
+            setBody(request)
         }
-        response.ensureSuccess()
+        response.ensureSuccess(request.debugShape())
 
         val channel = response.bodyAsChannel()
         val eventLines = mutableListOf<String>()
@@ -682,7 +682,25 @@ class KtorXaiApiClient(
         )
     }
 
-    private suspend fun HttpResponse.ensureSuccess() {
+    private fun ResponsesRequestDto.debugShape(): String {
+        val inputs = when (val root = input) {
+            is JsonPrimitive -> "string:${root.content.length}"
+            is JsonArray -> root.joinToString(prefix = "[", postfix = "]") { element ->
+                val message = element.jsonObject
+                val role = message["role"]?.jsonPrimitive?.content.orEmpty()
+                val contentShape = when (val content = message["content"]) {
+                    is JsonPrimitive -> "string:${content.content.length}"
+                    is JsonArray -> "array:${content.size}"
+                    else -> content?.let { it::class.simpleName }.orEmpty()
+                }
+                "$role/$contentShape"
+            }
+            else -> root::class.simpleName.orEmpty()
+        }
+        return "model=$model previous=${previousResponseId != null} input=$inputs"
+    }
+
+    private suspend fun HttpResponse.ensureSuccess(requestDebugShape: String? = null) {
         if (status.isSuccess()) return
 
         val rawBody = bodyAsText().take(500)
@@ -691,7 +709,10 @@ class KtorXaiApiClient(
             in 500..599 -> "Ошибка сервера xAI (${status.value}). Попробуйте позже."
             else -> rawBody.ifBlank { "HTTP ${status.value}: ${status.description}" }
         }
-        throw XaiApiException(status.value, readable)
+        throw XaiApiException(
+            statusCode = status.value,
+            message = requestDebugShape?.let { "$readable\nREQUEST=$it" } ?: readable
+        )
     }
 
     private companion object {

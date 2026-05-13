@@ -36,7 +36,7 @@ data class ChatCompletionRequestDto(
 @Serializable
 data class ResponsesRequestDto(
     val model: String,
-    val input: List<ApiRequestMessageDto>,
+    val input: JsonElement,
     val stream: Boolean = false,
     @SerialName("prompt_cache_key")
     val promptCacheKey: String? = null,
@@ -91,7 +91,7 @@ fun chatCompletionRequestDto(
     settings: ChatModelSettings
 ): ChatCompletionRequestDto = ChatCompletionRequestDto(
     model = model,
-    messages = messages.map { it.toChatCompletionsMessage() },
+    messages = messages.mapNotNull { it.toChatCompletionsMessage() },
     stream = stream,
     maxTokens = settings.maxTokens,
     temperature = settings.temperature,
@@ -112,7 +112,7 @@ fun responsesRequestDto(
     previousResponseId: String? = null
 ): ResponsesRequestDto = ResponsesRequestDto(
     model = model,
-    input = messages.map { it.toResponsesMessage() },
+    input = messages.toResponsesInput(model, previousResponseId),
     stream = stream,
     promptCacheKey = promptCacheKey,
     previousResponseId = previousResponseId,
@@ -124,16 +124,49 @@ fun responsesRequestDto(
     streamOptions = StreamOptionsDto(includeUsage = true).takeIf { stream }
 )
 
-private fun ApiChatMessage.toChatCompletionsMessage(): ApiRequestMessageDto {
+private fun String.usesMultiAgentResponsesMessageFormat(): Boolean {
+    return lowercase().startsWith("grok-4.20-multi-agent")
+}
+
+private fun List<ApiChatMessage>.toResponsesInput(
+    model: String,
+    previousResponseId: String?
+): JsonElement {
+    if (model.usesMultiAgentResponsesMessageFormat() && previousResponseId != null) {
+        val followUpText = lastOrNull { it.role == "user" && it.attachments.isEmpty() }
+            ?.content
+            ?.takeIf { it.isNotBlank() }
+        if (followUpText != null) {
+            return JsonPrimitive(followUpText)
+        }
+    }
+    val requestMessages = if (model.usesMultiAgentResponsesMessageFormat()) {
+        mapNotNull { it.toMultiAgentResponsesMessage() }
+    } else {
+        mapNotNull { it.toResponsesMessage() }
+    }
+    return JsonArray(requestMessages.map { message ->
+        buildJsonObject {
+            put("role", message.role)
+            put("content", message.content)
+        }
+    })
+}
+
+private fun ApiChatMessage.toChatCompletionsMessage(): ApiRequestMessageDto? {
     val imageAttachments = attachments.filter { it.kind == ApiMessageAttachmentKind.IMAGE }
-    if (imageAttachments.isEmpty()) {
-        return ApiRequestMessageDto(
-            role = role,
-            content = JsonPrimitive(content),
-            reasoningContent = reasoningContent?.takeIf { it.isNotBlank() }
-        )
+    if (imageAttachments.isEmpty() && content.isBlank()) {
+        return null
     }
     val blocks = buildList {
+        if (content.isNotBlank()) {
+            add(
+                buildJsonObject {
+                    put("type", "text")
+                    put("text", content)
+                }
+            )
+        }
         imageAttachments.mapNotNull { it.dataUrl }.forEach { dataUrl ->
             add(
                 buildJsonObject {
@@ -148,14 +181,16 @@ private fun ApiChatMessage.toChatCompletionsMessage(): ApiRequestMessageDto {
                 }
             )
         }
-        if (content.isNotBlank()) {
-            add(
-                buildJsonObject {
-                    put("type", "text")
-                    put("text", content)
-                }
-            )
-        }
+    }
+    if (blocks.isEmpty()) {
+        return null
+    }
+    if (imageAttachments.isEmpty()) {
+        return ApiRequestMessageDto(
+            role = role,
+            content = JsonArray(blocks),
+            reasoningContent = reasoningContent?.takeIf { it.isNotBlank() }
+        )
     }
     return ApiRequestMessageDto(
         role = role,
@@ -164,9 +199,56 @@ private fun ApiChatMessage.toChatCompletionsMessage(): ApiRequestMessageDto {
     )
 }
 
-private fun ApiChatMessage.toResponsesMessage(): ApiRequestMessageDto {
+private fun ApiChatMessage.toResponsesMessage(): ApiRequestMessageDto? {
+    val blocks = buildList {
+        if (content.isNotBlank()) {
+            add(
+                buildJsonObject {
+                    put("type", "input_text")
+                    put("text", content)
+                }
+            )
+        }
+        attachments.forEach { attachment ->
+            when (attachment.kind) {
+                ApiMessageAttachmentKind.IMAGE -> attachment.dataUrl?.let { dataUrl ->
+                    add(
+                        buildJsonObject {
+                            put("type", "input_image")
+                            put("image_url", dataUrl)
+                        }
+                    )
+                }
+                ApiMessageAttachmentKind.DOCUMENT -> attachment.fileId?.let { fileId ->
+                    add(
+                        buildJsonObject {
+                            put("type", "input_file")
+                            put("file_id", fileId)
+                        }
+                    )
+                }
+            }
+        }
+    }
+    if (blocks.isEmpty()) {
+        return null
+    }
+    return ApiRequestMessageDto(role = role, content = JsonArray(blocks))
+}
+
+private fun ApiChatMessage.toMultiAgentResponsesMessage(): ApiRequestMessageDto? {
+    if (role != "system" && role != "user" && role != "assistant") {
+        return null
+    }
+    if (role == "assistant") {
+        return content
+            .takeIf { it.isNotBlank() }
+            ?.let { ApiRequestMessageDto(role = role, content = JsonPrimitive(it)) }
+    }
     if (attachments.isEmpty()) {
-        return ApiRequestMessageDto(role = role, content = JsonPrimitive(content))
+        return content
+            .takeIf { it.isNotBlank() }
+            ?.let { ApiRequestMessageDto(role = role, content = JsonPrimitive(it)) }
     }
     val blocks = buildList {
         if (content.isNotBlank()) {
@@ -197,6 +279,9 @@ private fun ApiChatMessage.toResponsesMessage(): ApiRequestMessageDto {
                 }
             }
         }
+    }
+    if (blocks.isEmpty()) {
+        return null
     }
     return ApiRequestMessageDto(role = role, content = JsonArray(blocks))
 }

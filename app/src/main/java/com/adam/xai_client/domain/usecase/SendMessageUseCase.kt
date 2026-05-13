@@ -106,7 +106,11 @@ class SendMessageUseCase(
             ?.let { limit -> history.takeLast(limit) }
             ?: history
         val canUseResponsesContinuation = modelId.usesResponsesApiPath(effectiveModelSettings, contextHistory)
-        val responseContinuation = if (canUseResponsesContinuation && effectiveModelSettings.contextMessageLimit == 0) {
+        val responseContinuation = if (
+            canUseResponsesContinuation &&
+            effectiveModelSettings.contextMessageLimit == 0 &&
+            !modelId.usesMultiAgentResponsesApiPath()
+        ) {
             contextHistory.responseContinuation()
         } else {
             null
@@ -252,6 +256,10 @@ class SendMessageUseCase(
             history.any { message ->
                 message.attachments.any { it.kind == MessageAttachmentKind.DOCUMENT }
             }
+    }
+
+    private fun String.usesMultiAgentResponsesApiPath(): Boolean {
+        return lowercase().startsWith("grok-4.20-multi-agent")
     }
 
     private data class ResponseContinuation(
