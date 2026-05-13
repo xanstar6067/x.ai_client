@@ -150,6 +150,7 @@ fun XaiChatNavHost(container: AppContainer) {
                 onPromptCachingChange = viewModel::onPromptCachingChange,
                 onStreamingHapticsChange = viewModel::onStreamingHapticsChange,
                 onUiHapticsChange = viewModel::onUiHapticsChange,
+                onThemeModeChange = viewModel::onThemeModeChange,
                 onNamingModelSelected = viewModel::onNamingModelSelected,
                 onOpenModels = { navController.navigate(Screen.Models.route) },
                 onOpenPricing = { navController.navigate(Screen.Pricing.route) },

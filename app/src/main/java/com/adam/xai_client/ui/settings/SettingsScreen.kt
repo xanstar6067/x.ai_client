@@ -15,7 +15,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -46,6 +48,7 @@ import com.adam.xai_client.ui.components.TransientSnackbar
 import com.adam.xai_client.ui.haptics.UiHapticSignal
 import com.adam.xai_client.ui.haptics.rememberHapticClick
 import com.adam.xai_client.ui.haptics.rememberHapticValueChange
+import com.adam.xai_client.ui.theme.AppThemeMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +59,7 @@ fun SettingsScreen(
     onPromptCachingChange: (Boolean) -> Unit,
     onStreamingHapticsChange: (Boolean) -> Unit,
     onUiHapticsChange: (Boolean) -> Unit,
+    onThemeModeChange: (AppThemeMode) -> Unit,
     onNamingModelSelected: (String) -> Unit,
     onOpenModels: () -> Unit,
     onOpenPricing: () -> Unit,
@@ -71,6 +75,9 @@ fun SettingsScreen(
     val hapticStreamingHapticsChange = rememberHapticValueChange(onStreamingHapticsChange)
     val hapticUiHapticsChange = rememberHapticValueChange(onUiHapticsChange)
     val hapticPromptCachingChange = rememberHapticValueChange(onPromptCachingChange)
+    val hapticThemeModeChange = rememberHapticValueChange { darkTheme: Boolean ->
+        onThemeModeChange(if (darkTheme) AppThemeMode.Dark else AppThemeMode.Light)
+    }
     val hapticOpenModels = rememberHapticClick(onOpenModels)
     val hapticOpenPricing = rememberHapticClick(onOpenPricing)
     val hapticSave = rememberHapticClick(UiHapticSignal.Confirm, onSave)
@@ -161,6 +168,36 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = if (state.themeMode.isDark) {
+                        Icons.Filled.DarkMode
+                    } else {
+                        Icons.Filled.LightMode
+                    },
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Тема оформления",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        text = if (state.themeMode.isDark) "Темная" else "Светлая",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = state.themeMode.isDark,
+                    onCheckedChange = hapticThemeModeChange
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,

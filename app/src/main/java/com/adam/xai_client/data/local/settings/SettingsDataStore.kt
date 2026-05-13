@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.adam.xai_client.domain.model.ApiSettings
+import com.adam.xai_client.ui.theme.AppThemeMode
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -47,6 +48,9 @@ class SettingsDataStore(private val context: Context) {
 
     val uiHapticsEnabled: Flow<Boolean> = context.xaiSettingsDataStore.data
         .map { preferences -> preferences[UI_HAPTICS_ENABLED] ?: true }
+
+    val themeMode: Flow<AppThemeMode> = context.xaiSettingsDataStore.data
+        .map { preferences -> AppThemeMode.fromStorageValue(preferences[THEME_MODE]) }
 
     suspend fun saveApiSettings(apiKey: String, baseUrl: String) {
         context.xaiSettingsDataStore.edit { preferences ->
@@ -97,6 +101,12 @@ class SettingsDataStore(private val context: Context) {
         }
     }
 
+    suspend fun setThemeMode(themeMode: AppThemeMode) {
+        context.xaiSettingsDataStore.edit { preferences ->
+            preferences[THEME_MODE] = themeMode.storageValue
+        }
+    }
+
     suspend fun setPromptCachingEnabled(enabled: Boolean) {
         context.xaiSettingsDataStore.edit { preferences ->
             preferences[PROMPT_CACHING_ENABLED] = enabled
@@ -112,5 +122,6 @@ class SettingsDataStore(private val context: Context) {
         val CHAT_NAMING_MODEL_ID = stringPreferencesKey("chat_naming_model_id")
         val STREAMING_HAPTICS_ENABLED = booleanPreferencesKey("streaming_haptics_enabled")
         val UI_HAPTICS_ENABLED = booleanPreferencesKey("ui_haptics_enabled")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
     }
 }

@@ -16,6 +16,7 @@ import com.adam.xai_client.domain.model.ChatModelSettings
 import com.adam.xai_client.domain.model.MessageRole
 import com.adam.xai_client.domain.model.isTextChatModel
 import com.adam.xai_client.ui.components.toUserMessage
+import com.adam.xai_client.ui.theme.AppThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +32,7 @@ data class SettingsUiState(
     val promptCachingEnabled: Boolean = true,
     val streamingHapticsEnabled: Boolean = true,
     val uiHapticsEnabled: Boolean = true,
+    val themeMode: AppThemeMode = AppThemeMode.Default,
     val isCheckingConnection: Boolean = false,
     val error: String? = null,
     val message: String? = null
@@ -64,6 +66,11 @@ class SettingsViewModel(
         viewModelScope.launch {
             settingsRepository.uiHapticsEnabled.collect { enabled ->
                 _uiState.update { it.copy(uiHapticsEnabled = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.themeMode.collect { themeMode ->
+                _uiState.update { it.copy(themeMode = themeMode) }
             }
         }
         viewModelScope.launch {
@@ -116,6 +123,13 @@ class SettingsViewModel(
         _uiState.update { it.copy(uiHapticsEnabled = enabled, error = null, message = null) }
         viewModelScope.launch {
             settingsRepository.setUiHapticsEnabled(enabled)
+        }
+    }
+
+    fun onThemeModeChange(themeMode: AppThemeMode) {
+        _uiState.update { it.copy(themeMode = themeMode, error = null, message = null) }
+        viewModelScope.launch {
+            settingsRepository.setThemeMode(themeMode)
         }
     }
 

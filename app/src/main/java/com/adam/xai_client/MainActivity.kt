@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.adam.xai_client.navigation.XaiChatNavHost
+import com.adam.xai_client.ui.theme.AppThemeMode
 import com.adam.xai_client.ui.theme.Xai_clientTheme
 import kotlinx.coroutines.launch
 
@@ -23,7 +25,10 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         setContent {
-            Xai_clientTheme {
+            val themeMode = appContainer.settingsRepository.themeMode
+                .collectAsStateWithLifecycle(initialValue = AppThemeMode.Default)
+                .value
+            Xai_clientTheme(themeMode = themeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
