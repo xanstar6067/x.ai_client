@@ -45,6 +45,7 @@ import kotlinx.coroutines.withTimeout
 
 data class ChatUiState(
     val chatId: Long? = null,
+    val chatTitle: String = "",
     val messages: List<Message> = emptyList(),
     val inputText: String = "",
     val selectedModelId: String? = null,
@@ -120,6 +121,7 @@ class ChatViewModel(
                         _uiState.update {
                             it.copy(
                                 chatId = chat.id,
+                                chatTitle = chat.title,
                                 selectedModelId = chat.selectedModelId ?: it.selectedModelId,
                                 selectedRoleId = chat.selectedRoleId ?: it.selectedRoleId,
                                 cachedTokenCount = chat.cachedTokenCount,

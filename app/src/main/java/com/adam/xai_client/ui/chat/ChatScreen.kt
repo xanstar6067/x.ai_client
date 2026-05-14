@@ -92,6 +92,7 @@ import com.adam.xai_client.domain.model.ReasoningEffort
 import com.adam.xai_client.domain.model.XaiModelLimits
 import com.adam.xai_client.domain.model.toUsdCost
 import com.adam.xai_client.ui.components.DropdownSelector
+import com.adam.xai_client.ui.components.MarkdownInlineText
 import com.adam.xai_client.ui.components.MessageBubble
 import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
@@ -181,10 +182,11 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = if (state.chatId == null) "Новый чат" else "Чат",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                    MarkdownInlineText(
+                        markdown = if (state.chatId == null) "Новый чат" else state.chatTitle.ifBlank { "Чат" },
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1
                     )
                 },
                 navigationIcon = {

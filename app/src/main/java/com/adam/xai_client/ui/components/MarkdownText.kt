@@ -1,6 +1,7 @@
 package com.adam.xai_client.ui.components
 
 import android.graphics.Typeface
+import android.text.TextUtils
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
 import androidx.compose.foundation.BorderStroke
@@ -14,20 +15,30 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.adam.xai_client.ui.haptics.rememberHapticClick
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
 import io.noties.markwon.ext.tasklist.TaskListPlugin
@@ -37,7 +48,8 @@ import io.noties.markwon.linkify.LinkifyPlugin
 fun MarkdownText(
     markdown: String,
     color: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onCopyCode: ((String) -> Unit)? = null
 ) {
     val blocks = remember(markdown) { splitMarkdownBlocks(markdown) }
 
@@ -56,6 +68,13 @@ fun MarkdownText(
                     }
                 }
 
+                is MarkdownRenderBlock.Code -> MarkdownCodeBlock(
+                    code = block.code,
+                    language = block.language,
+                    color = color,
+                    onCopy = onCopyCode
+                )
+
                 is MarkdownRenderBlock.Table -> MarkdownTable(
                     table = block,
                     color = color
@@ -66,13 +85,33 @@ fun MarkdownText(
 }
 
 @Composable
+fun MarkdownInlineText(
+    markdown: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.bodyLarge,
+    maxLines: Int = Int.MAX_VALUE
+) {
+    MarkwonText(
+        markdown = markdown,
+        color = color,
+        modifier = modifier,
+        style = style,
+        maxLines = maxLines,
+        selectable = false
+    )
+}
+
+@Composable
 private fun MarkwonText(
     markdown: String,
     color: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.bodyLarge,
+    maxLines: Int = Int.MAX_VALUE,
+    selectable: Boolean = true
 ) {
     val context = LocalContext.current
-    val typography = MaterialTheme.typography.bodyLarge
     val markwon = remember(context) {
         Markwon.builder(context)
             .usePlugin(StrikethroughPlugin.create())
@@ -80,20 +119,20 @@ private fun MarkwonText(
             .usePlugin(LinkifyPlugin.create())
             .build()
     }
-    val textSize = typography.fontSize.takeIf { it.isSp } ?: 16.sp
-    val lineHeight = typography.lineHeight.takeIf { it.isSp }
+    val textSize = style.fontSize.takeIf { it.isSp } ?: 16.sp
+    val lineHeight = style.lineHeight.takeIf { it.isSp }
     val typeface = remember(
-        typography.fontFamily,
-        typography.fontWeight,
-        typography.fontStyle
+        style.fontFamily,
+        style.fontWeight,
+        style.fontStyle
     ) {
-        val style = when {
-            typography.fontWeight == FontWeight.Bold && typography.fontStyle == FontStyle.Italic -> Typeface.BOLD_ITALIC
-            typography.fontWeight == FontWeight.Bold -> Typeface.BOLD
-            typography.fontStyle == FontStyle.Italic -> Typeface.ITALIC
+        val typefaceStyle = when {
+            style.fontWeight == FontWeight.Bold && style.fontStyle == FontStyle.Italic -> Typeface.BOLD_ITALIC
+            style.fontWeight == FontWeight.Bold -> Typeface.BOLD
+            style.fontStyle == FontStyle.Italic -> Typeface.ITALIC
             else -> Typeface.NORMAL
         }
-        Typeface.create(Typeface.DEFAULT, style)
+        Typeface.create(Typeface.DEFAULT, typefaceStyle)
     }
 
     AndroidView(
@@ -103,13 +142,17 @@ private fun MarkwonText(
                 includeFontPadding = true
                 linksClickable = true
                 movementMethod = LinkMovementMethod.getInstance()
-                setTextIsSelectable(false)
             }
         },
         update = { textView ->
             textView.setTextColor(color.toArgb())
             textView.textSize = textSize.value
             textView.typeface = typeface
+            textView.maxLines = maxLines
+            textView.ellipsize = if (maxLines == Int.MAX_VALUE) null else TextUtils.TruncateAt.END
+            textView.setTextIsSelectable(selectable)
+            textView.linksClickable = true
+            textView.movementMethod = LinkMovementMethod.getInstance()
             if (lineHeight != null) {
                 textView.setLineSpacing(0f, lineHeight.value / textSize.value)
             } else {
@@ -118,6 +161,60 @@ private fun MarkwonText(
             markwon.setMarkdown(textView, markdown)
         }
     )
+}
+
+@Composable
+private fun MarkdownCodeBlock(
+    code: String,
+    language: String?,
+    color: Color,
+    onCopy: ((String) -> Unit)?
+) {
+    val copyCode = onCopy?.let { copy ->
+        rememberHapticClick { copy(code) }
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.68f),
+        contentColor = color,
+        border = BorderStroke(1.dp, color.copy(alpha = 0.18f)),
+        shape = MaterialTheme.shapes.small
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            if (!language.isNullOrBlank() || copyCode != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = language?.takeIf { it.isNotBlank() } ?: "code",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = color.copy(alpha = 0.72f),
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (copyCode != null) {
+                        IconButton(onClick = copyCode) {
+                            Icon(
+                                Icons.Filled.ContentCopy,
+                                contentDescription = "Копировать код",
+                                tint = color.copy(alpha = 0.78f)
+                            )
+                        }
+                    }
+                }
+            }
+            SelectionContainer {
+                Text(
+                    text = code,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                    color = color
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -186,6 +283,7 @@ private fun MarkdownTableRow(
 
 private sealed interface MarkdownRenderBlock {
     data class Text(val markdown: String) : MarkdownRenderBlock
+    data class Code(val language: String?, val code: String) : MarkdownRenderBlock
     data class Table(
         val header: List<String>,
         val rows: List<List<String>>
@@ -211,7 +309,21 @@ private fun splitMarkdownBlocks(markdown: String): List<MarkdownRenderBlock> {
     }
 
     while (index < lines.size) {
-        if (isTableStart(lines, index)) {
+        val fence = codeFenceFor(lines[index])
+        if (fence != null) {
+            flushText()
+            val codeLines = mutableListOf<String>()
+            index++
+            while (index < lines.size && !isClosingCodeFence(lines[index], fence.marker)) {
+                codeLines += lines[index]
+                index++
+            }
+            if (index < lines.size) index++
+            blocks += MarkdownRenderBlock.Code(
+                language = fence.language,
+                code = codeLines.joinToString("\n").trimEnd()
+            )
+        } else if (isTableStart(lines, index)) {
             flushText()
             val header = splitTableRow(lines[index])
             index += 2
@@ -229,6 +341,25 @@ private fun splitMarkdownBlocks(markdown: String): List<MarkdownRenderBlock> {
 
     flushText()
     return blocks
+}
+
+private data class CodeFence(val marker: String, val language: String?)
+
+private fun codeFenceFor(line: String): CodeFence? {
+    val trimmed = line.trimStart()
+    val marker = when {
+        trimmed.startsWith("```") -> "```"
+        trimmed.startsWith("~~~") -> "~~~"
+        else -> return null
+    }
+    return CodeFence(
+        marker = marker,
+        language = trimmed.removePrefix(marker).trim().takeIf { it.isNotBlank() }
+    )
+}
+
+private fun isClosingCodeFence(line: String, marker: String): Boolean {
+    return line.trimStart().startsWith(marker)
 }
 
 private fun isTableStart(lines: List<String>, index: Int): Boolean {

@@ -149,7 +149,8 @@ fun MessageBubble(
                             isExpanded = isReasoningExpanded,
                             textColor = textColor,
                             onToggle = { isReasoningExpanded = !isReasoningExpanded },
-                            onCopy = { onCopy(reasoning) }
+                            onCopy = { onCopy(reasoning) },
+                            onCopyCode = onCopy
                         )
                         if (visibleContent.isNotBlank()) {
                             HorizontalDivider(color = textColor.copy(alpha = 0.18f))
@@ -158,7 +159,8 @@ fun MessageBubble(
                     if (visibleContent.isNotBlank()) {
                         MarkdownText(
                             markdown = visibleContent,
-                            color = textColor
+                            color = textColor,
+                            onCopyCode = onCopy
                         )
                     }
                     if (message.attachments.isNotEmpty()) {
@@ -302,7 +304,8 @@ private fun ReasoningBlock(
     isExpanded: Boolean,
     textColor: Color,
     onToggle: () -> Unit,
-    onCopy: () -> Unit
+    onCopy: () -> Unit,
+    onCopyCode: (String) -> Unit
 ) {
     val copyReasoning = rememberHapticClick(onCopy)
     val toggleReasoning = rememberHapticClick(UiHapticSignal.Toggle, onToggle)
@@ -345,7 +348,8 @@ private fun ReasoningBlock(
             if (isExpanded) {
                 MarkdownText(
                     markdown = reasoning,
-                    color = textColor.copy(alpha = 0.78f)
+                    color = textColor.copy(alpha = 0.78f),
+                    onCopyCode = onCopyCode
                 )
             }
         }
