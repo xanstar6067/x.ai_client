@@ -3,6 +3,9 @@ package com.adam.xai_client.ui.components
 import android.graphics.Typeface
 import android.text.TextUtils
 import android.text.method.LinkMovementMethod
+import android.view.ViewGroup
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.TextView
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -12,12 +15,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -25,7 +31,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -173,6 +183,11 @@ private fun MarkdownCodeBlock(
     val copyCode = onCopy?.let { copy ->
         rememberHapticClick { copy(code) }
     }
+    val canRunHtml = remember(language) { language.isHtmlLanguage() }
+    var isPreviewVisible by rememberSaveable(code, language) { mutableStateOf(false) }
+    val togglePreview = rememberHapticClick {
+        isPreviewVisible = !isPreviewVisible
+    }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -203,7 +218,28 @@ private fun MarkdownCodeBlock(
                             )
                         }
                     }
+                    if (canRunHtml) {
+                        IconButton(onClick = togglePreview) {
+                            Icon(
+                                if (isPreviewVisible) Icons.Filled.Close else Icons.Filled.PlayArrow,
+                                contentDescription = if (isPreviewVisible) {
+                                    "Закрыть HTML-превью"
+                                } else {
+                                    "Запустить HTML"
+                                },
+                                tint = color.copy(alpha = 0.78f)
+                            )
+                        }
+                    }
                 }
+            }
+            if (isPreviewVisible && canRunHtml) {
+                HtmlPreview(
+                    html = code,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 220.dp, max = 420.dp)
+                )
             }
             Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
                 SelectionContainer {
@@ -215,6 +251,46 @@ private fun MarkdownCodeBlock(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HtmlPreview(
+    html: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.36f)),
+        shape = MaterialTheme.shapes.small
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxWidth(),
+            factory = { context ->
+                WebView(context).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    webViewClient = WebViewClient()
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.loadWithOverviewMode = true
+                    settings.useWideViewPort = true
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                }
+            },
+            update = { webView ->
+                webView.loadDataWithBaseURL(
+                    "https://local-html-preview.invalid/",
+                    html,
+                    "text/html",
+                    "UTF-8",
+                    null
+                )
+            }
+        )
     }
 }
 
@@ -361,6 +437,10 @@ private fun codeFenceFor(line: String): CodeFence? {
 
 private fun isClosingCodeFence(line: String, marker: String): Boolean {
     return line.trimStart().startsWith(marker)
+}
+
+private fun String?.isHtmlLanguage(): Boolean {
+    return this?.trim()?.lowercase() in setOf("html", "htm")
 }
 
 private fun isTableStart(lines: List<String>, index: Int): Boolean {
