@@ -175,9 +175,7 @@ private fun MarkdownCodeBlock(
     }
 
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.68f),
         contentColor = color,
         border = BorderStroke(1.dp, color.copy(alpha = 0.18f)),
@@ -193,7 +191,8 @@ private fun MarkdownCodeBlock(
                         text = language?.takeIf { it.isNotBlank() } ?: "code",
                         style = MaterialTheme.typography.labelSmall,
                         color = color.copy(alpha = 0.72f),
-                        modifier = Modifier.weight(1f)
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = true)
                     )
                     if (copyCode != null) {
                         IconButton(onClick = copyCode) {
@@ -206,12 +205,14 @@ private fun MarkdownCodeBlock(
                     }
                 }
             }
-            SelectionContainer {
-                Text(
-                    text = code,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                    color = color
-                )
+            Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                SelectionContainer {
+                    Text(
+                        text = code,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                        color = color
+                    )
+                }
             }
         }
     }
