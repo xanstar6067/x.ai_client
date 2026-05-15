@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.adam.xai_client.domain.model.ApiSettings
@@ -13,10 +14,13 @@ import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 
 private val Context.xaiSettingsDataStore by preferencesDataStore(name = "xai_settings")
 
 class SettingsDataStore(private val context: Context) {
+    private val apiKeyCipher = ApiKeyCipher()
+
     val apiSettings: Flow<ApiSettings> = context.xaiSettingsDataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -25,9 +29,12 @@ class SettingsDataStore(private val context: Context) {
                 throw exception
             }
         }
+        .onEach { preferences ->
+            migrateLegacyApiKey(preferences)
+        }
         .map { preferences ->
             ApiSettings(
-                apiKey = preferences[API_KEY].orEmpty(),
+                apiKey = readApiKey(preferences),
                 baseUrl = preferences[BASE_URL]?.takeIf { it.isNotBlank() }
                     ?: ApiSettings.DEFAULT_BASE_URL,
                 promptCachingEnabled = preferences[PROMPT_CACHING_ENABLED] ?: true
@@ -53,10 +60,39 @@ class SettingsDataStore(private val context: Context) {
         .map { preferences -> AppThemeMode.fromStorageValue(preferences[THEME_MODE]) }
 
     suspend fun saveApiSettings(apiKey: String, baseUrl: String) {
+        val trimmedApiKey = apiKey.trim()
         context.xaiSettingsDataStore.edit { preferences ->
-            preferences[API_KEY] = apiKey.trim()
+            preferences.remove(API_KEY)
+            if (trimmedApiKey.isBlank()) {
+                preferences.remove(ENCRYPTED_API_KEY)
+            } else {
+                preferences[ENCRYPTED_API_KEY] = apiKeyCipher.encrypt(trimmedApiKey)
+            }
             preferences[BASE_URL] = baseUrl.trim().ifBlank { ApiSettings.DEFAULT_BASE_URL }
         }
+    }
+
+    private suspend fun migrateLegacyApiKey(preferences: Preferences) {
+        val legacyApiKey = preferences[API_KEY]?.trim().orEmpty()
+        val encryptedApiKey = preferences[ENCRYPTED_API_KEY].orEmpty()
+        if (legacyApiKey.isBlank() || encryptedApiKey.isNotBlank()) {
+            return
+        }
+
+        context.xaiSettingsDataStore.edit { mutablePreferences ->
+            if (mutablePreferences[API_KEY] == legacyApiKey && mutablePreferences[ENCRYPTED_API_KEY].isNullOrBlank()) {
+                mutablePreferences[ENCRYPTED_API_KEY] = apiKeyCipher.encrypt(legacyApiKey)
+                mutablePreferences.remove(API_KEY)
+            }
+        }
+    }
+
+    private fun readApiKey(preferences: Preferences): String {
+        val encryptedApiKey = preferences[ENCRYPTED_API_KEY].orEmpty()
+        if (encryptedApiKey.isNotBlank()) {
+            return runCatching { apiKeyCipher.decrypt(encryptedApiKey) }.getOrDefault("")
+        }
+        return preferences[API_KEY].orEmpty()
     }
 
     suspend fun setLastSelectedModelId(modelId: String?) {
@@ -115,6 +151,7 @@ class SettingsDataStore(private val context: Context) {
 
     private companion object {
         val API_KEY = stringPreferencesKey("api_key")
+        val ENCRYPTED_API_KEY = stringPreferencesKey("encrypted_api_key")
         val BASE_URL = stringPreferencesKey("base_url")
         val PROMPT_CACHING_ENABLED = booleanPreferencesKey("prompt_caching_enabled")
         val LAST_SELECTED_MODEL_ID = stringPreferencesKey("last_selected_model_id")
