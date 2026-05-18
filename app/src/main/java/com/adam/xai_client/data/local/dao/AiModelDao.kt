@@ -25,4 +25,7 @@ interface AiModelDao {
 
     @Upsert
     suspend fun upsertModels(models: List<AiModelEntity>)
+
+    @Query("DELETE FROM ai_models WHERE id NOT IN (:modelIds)")
+    suspend fun deleteModelsNotIn(modelIds: List<String>)
 }

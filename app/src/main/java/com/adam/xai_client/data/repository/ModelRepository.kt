@@ -19,6 +19,7 @@ class ModelRepository(
         .map { entities -> entities.map { it.asDomain() } }
 
     suspend fun ensureKnownModels() {
+        if (aiModelDao.getModels().isNotEmpty()) return
         upsertModelsPreservingEnabled(knownXaiModels())
     }
 
@@ -32,8 +33,9 @@ class ModelRepository(
             apiKey = settings.apiKey,
             baseUrl = settings.baseUrl
         )
-        val models = (remoteModels + knownXaiModels()).distinctBy { it.id }
+        val models = remoteModels.distinctBy { it.id }
         upsertModelsPreservingEnabled(models)
+        deleteModelsMissingFrom(models)
     }
 
     private suspend fun upsertModelsPreservingEnabled(models: List<AiModel>) {
@@ -51,6 +53,13 @@ class ModelRepository(
                     .asEntity(updatedAt = now)
             }
         )
+    }
+
+    private suspend fun deleteModelsMissingFrom(models: List<AiModel>) {
+        val modelIds = models.map { it.id }
+        if (modelIds.isNotEmpty()) {
+            aiModelDao.deleteModelsNotIn(modelIds)
+        }
     }
 
     suspend fun setModelEnabled(modelId: String, enabled: Boolean) {
