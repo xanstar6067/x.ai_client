@@ -136,6 +136,7 @@ fun ChatScreen(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
+    var hasPositionedInitialMessages by remember(state.chatId) { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
     val hapticBack = rememberHapticClick(onBack)
     val hapticModelInfoOpen = rememberHapticClick { onModelInfoOpenChange(true) }
@@ -159,9 +160,14 @@ fun ChatScreen(
         enabled = state.streamingHapticsEnabled
     )
 
-    LaunchedEffect(state.messages.size) {
+    LaunchedEffect(state.chatId, state.messages.size) {
         if (state.messages.isNotEmpty()) {
-            listState.animateScrollToItem(state.messages.lastIndex)
+            if (hasPositionedInitialMessages) {
+                listState.animateScrollToItem(state.messages.lastIndex)
+            } else {
+                listState.scrollToItem(state.messages.lastIndex)
+                hasPositionedInitialMessages = true
+            }
         }
     }
 

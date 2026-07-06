@@ -11,7 +11,9 @@ import com.adam.xai_client.domain.model.Message
 import com.adam.xai_client.domain.model.MessageAttachment
 import com.adam.xai_client.domain.model.MessageRole
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
 class ChatRepository(
@@ -38,7 +40,7 @@ class ChatRepository(
         } else {
             messageDao.observeMessages(chatId).map { entities ->
                 entities.activePath().mapActivePathWithVersions(entities)
-            }
+            }.flowOn(Dispatchers.Default)
         }
     }
 
@@ -120,7 +122,8 @@ class ChatRepository(
     suspend fun updateMessageText(
         messageId: Long,
         content: String,
-        reasoningContent: String?
+        reasoningContent: String?,
+        tokenCount: Int
     ) {
         val trimmedContent = content.trim()
         messageDao.updateMessageContent(
@@ -128,7 +131,7 @@ class ChatRepository(
             content = trimmedContent,
             reasoningContent = reasoningContent,
             responseId = null,
-            tokenCount = null
+            tokenCount = tokenCount
         )
         messageDao.clearResponseId(messageId)
     }

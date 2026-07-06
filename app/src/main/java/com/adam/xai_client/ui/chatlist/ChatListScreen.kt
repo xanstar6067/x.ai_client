@@ -41,7 +41,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.adam.xai_client.domain.model.Chat
-import com.adam.xai_client.ui.components.MarkdownInlineText
 import com.adam.xai_client.ui.components.SafeSnackbarHost
 import com.adam.xai_client.ui.components.TransientSnackbar
 import com.adam.xai_client.ui.haptics.UiHapticSignal
@@ -228,8 +227,8 @@ private fun ChatCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                MarkdownInlineText(
-                    markdown = chat.title,
+                Text(
+                    text = chat.title,
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 2

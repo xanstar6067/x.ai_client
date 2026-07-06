@@ -33,14 +33,17 @@ import com.adam.xai_client.domain.usecase.SendMessageUseCase
 import com.adam.xai_client.ui.components.toUserMessage
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 data class ChatUiState(
@@ -144,20 +147,15 @@ class ChatViewModel(
 
         viewModelScope.launch {
             chatIdFlow.flatMapLatest { chatRepository.observeMessages(it) }
-                .collect { messages ->
-                    val messagesWithTokenCounts = messages.map { message ->
-                        message.copy(
-                            tokenCount = tokenCounter.countMessage(
-                                message.content,
-                                message.reasoningContent
-                            )
-                        )
+                .collectLatest { messages ->
+                    updateMessages(messages)
+
+                    if (_uiState.value.isSending) return@collectLatest
+                    val messagesWithTokenCounts = withContext(Dispatchers.Default) {
+                        messages.withMissingTokenCountsCalculated(tokenCounter)
                     }
-                    _uiState.update {
-                        it.copy(
-                            messages = messagesWithTokenCounts,
-                            chatTokenCount = messagesWithTokenCounts.sumOf { message -> message.tokenCount }
-                        ).withEstimatedNextPromptCost()
+                    if (messagesWithTokenCounts != messages) {
+                        updateMessages(messagesWithTokenCounts)
                     }
                 }
         }
@@ -231,10 +229,14 @@ class ChatViewModel(
             }
             runCatching {
                 val message = _uiState.value.messages.firstOrNull { it.id == messageId }
+                val tokenCount = withContext(Dispatchers.Default) {
+                    tokenCounter.countMessage(content, message?.reasoningContent)
+                }
                 chatRepository.updateMessageText(
                     messageId = messageId,
                     content = content,
-                    reasoningContent = message?.reasoningContent
+                    reasoningContent = message?.reasoningContent,
+                    tokenCount = tokenCount
                 )
                 _uiState.value.chatId?.let { chatRepository.touchChat(it) }
             }.onFailure { throwable ->
@@ -684,6 +686,15 @@ class ChatViewModel(
         }?.supportsImageInput() == true
     }
 
+    private fun updateMessages(messages: List<Message>) {
+        _uiState.update {
+            it.copy(
+                messages = messages,
+                chatTokenCount = messages.sumOf { message -> message.tokenCount }
+            ).withEstimatedNextPromptCost()
+        }
+    }
+
     private fun supportsDocumentAttachments(modelId: String?): Boolean {
         return modelId?.let { selected ->
             latestModels.firstOrNull { it.id == selected || selected in it.aliases }
@@ -732,6 +743,32 @@ class ChatViewModel(
                     tokenCounter = container.tokenCounter
                 )
             }
+        }
+    }
+}
+
+internal fun List<Message>.withMissingTokenCountsCalculated(
+    tokenCounter: TokenCounter
+): List<Message> {
+    val hasMissingCounts = any { message ->
+        message.tokenCount <= 0 &&
+            (message.content.isNotBlank() || !message.reasoningContent.isNullOrBlank())
+    }
+    if (!hasMissingCounts) return this
+
+    return map { message ->
+        if (
+            message.tokenCount > 0 ||
+            (message.content.isBlank() && message.reasoningContent.isNullOrBlank())
+        ) {
+            message
+        } else {
+            message.copy(
+                tokenCount = tokenCounter.countMessage(
+                    message.content,
+                    message.reasoningContent
+                )
+            )
         }
     }
 }
